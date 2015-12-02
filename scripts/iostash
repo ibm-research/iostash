@@ -1,0 +1,167 @@
+#!/bin/bash
+
+MODULE_NAME="iostash"
+
+SYSFS_CTL_DIR="/sys/module/$MODULE_NAME/$MODULE_NAME-ctl"
+SYSFS_CACHES_DIR="/sys/module/$MODULE_NAME/caches"
+SYSFS_TARGETS_DIR="/sys/module/$MODULE_NAME/targets"
+CACHE_CTL_FILE="$SYSFS_CTL_DIR/caches"
+TARGET_CTL_FILE="$SYSFS_CTL_DIR/targets"
+
+usage () {
+    echo "----------------------------------------------------------------------"
+    echo "iostash"
+    echo "Host-side Flash-based Caching"
+    echo "Version 0.1"
+    echo "https://github.com/ibm-research/iostash"
+    echo "----------------------------------------------------------------------"
+    echo ""
+    echo "Usage: "
+    echo "$0 <class> <action> <object>"
+    echo ""
+    echo "iostash supports the following classes:"
+    echo ""
+    echo "cache"
+    echo "  Control the devices being used for caching."
+    echo "    Actions:"
+    echo "    add     <object=device>      Add a new SSD device to the cache"
+    echo "    remove  <object=device>      Remove an SSD device from the cache"
+    echo "    list    <>                   List SSDs devices used by the cache"
+    echo ""
+    echo "target"
+    echo "  Control which backend devices to cache from."
+    echo "    Actions:"
+    echo "    add     <object=device>      Start caching from a target device"
+    echo "    remove  <object=device>      Stop caching from a target device"
+    echo "    list    <>                   List all target devices"
+    echo ""
+    echo "global"
+    echo "  Control global properties of iostash."
+    echo "    Actions:"
+    echo "    stats   <>                   Print out global statistics."
+    echo ""
+    echo "help"
+    echo "  Print these instructions and exit"
+    echo "----------------------------------------------------------------------"
+}
+
+
+check_ret()
+{
+  cur_ret_val=$?
+  if [ $cur_ret_val -ne 0 ]
+  then
+    echo "ERROR: $* returned $cur_ret_val."
+        exit $cur_ret_val
+  fi
+}
+
+check_dev()
+{
+    if [ ! -b "$1" ];
+    then
+	echo "$1 is not a block device"
+	exit 1
+    fi
+}
+
+
+## Require superuser privileges
+if [[ $(/usr/bin/id -u) -ne 0 ]]; then
+    echo "Superuser privileges required. Aborting..."
+    exit 1
+fi
+
+
+if [ $# -le 1 ]
+then
+    usage
+    exit
+fi
+
+MOD_LOADED=$(lsmod | grep $MODULE_NAME)
+
+if [ -z "$MOD_LOADED" ];
+then
+    echo "Loading the $MODULE_NAME kernel module."
+    modprobe "$MODULE_NAME"
+    check_ret "$MODULE_NAME kernel module load."
+fi
+
+COMPONENT="$1"
+ACTION="$2"
+DEVNAME="$3"
+
+case "$COMPONENT" in
+    cache):
+	case "$ACTION" in
+	    add):
+		check_dev "$DEVNAME"
+		echo "Adding $DEVNAME to the cache."
+		echo "add $DEVNAME" > $CACHE_CTL_FILE
+		;;
+
+	    remove):
+		check_dev "$DEVNAME"
+		echo "Removing $DEVNAME from the cache."
+		echo "rm $DEVNAME" > $CACHE_CTL_FILE
+		;;
+
+	    list):
+	    	echo "Listing cache devices."
+		DEVS=$(ls "$SYSFS_CACHES_DIR")
+		for d in $DEVS;
+		do
+		    cat "$SYSFS_CACHES_DIR/$d/name"
+		done
+		;;
+	    *):
+		;;
+	    esac
+	;;
+
+    target):
+	case "$ACTION" in
+	    add):
+		check_dev "$DEVNAME"
+		echo "Starting caching from $DEVNAME."
+		echo "add $DEVNAME" > $TARGET_CTL_FILE
+		;;
+
+	    remove):
+	    	check_dev "$DEVNAME"
+		echo "rm $DEVNAME" > $TARGET_CTL_FILE
+	    	echo "Stopping caching from $DEVNAME."
+	    	;;
+
+	    list):
+	    	echo "Listing cached target devices."
+		DEVS=$(ls "$SYSFS_TARGETS_DIR")
+		for d in $DEVS;
+		do
+		    cat "$SYSFS_TARGETS_DIR/$d/name"
+		done
+	    	;;
+
+	    *):
+	    	;;
+	esac
+	;;
+
+    global):
+	case "$ACTION" in
+	    stats):
+		cat "$SYSFS_CTL_DIR/gstats"
+		;;
+	    *)
+		;;
+
+	esac
+	;;
+
+    *):
+	echo -e "Unknown component \"$COMPONENT\"."
+	echo "Use '$0 help' for usage instructions."
+	exit
+	;;
+esac

@@ -1,0 +1,2 @@
+SUBSYSTEM=="block", KERNEL=="vd*", ACTION=="add", RUN+="/usr/bin/addflasche %k"
+SUBSYSTEM=="block", KERNEL=="vd*", ACTION=="remove", RUN+="/usr/bin/rmflasch %k"
