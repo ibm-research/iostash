@@ -16,7 +16,7 @@ Flash storage. It can transparently cache from any block device target
 (typically SSD). It dynamically hooks/unhooks into the target block
 device, even if it is already mounted, and thus enables seamless
 application acceleration. Also, it supports caching from one or more
-targets to one or more targets (e.g., 3 HDDs caching to 1SSD). It
+targets to one or more cache devices (e.g., 3 HDDs caching to 1SSD). It
 supports asynchronous write-through.
 
 Details on the architecture of iostash can be found in the research
@@ -81,7 +81,7 @@ sudo iostash cache list
 5. Stop caching from a device target (say /dev/sda):
 sudo iostash target remove /dev/sda
 
-6. Remove a device from the pool of caching device (say /dev/nvme0n1):
+6. Remove a device from the pool of cache devices (say /dev/nvme0n1):
 sudo iostash cache remove /dev/nvme0n1
 
 7. View global statistics (cache hits, etc):
