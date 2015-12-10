@@ -71,7 +71,7 @@
 #define BIO_SIZE(bio)       ((bio)->bi_size)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,11,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
 #define BIO_CLONEBS(bio,bs) bio_clone_bioset((bio), GFP_KERNEL, (bs))
 #else
 #define BIO_CLONEBS(_bio,bs) ({\
