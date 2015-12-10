@@ -112,11 +112,15 @@ static void _unload_hdd(struct hdd_info * hdd)
 		/* we delete in place in older kernels */
 		list_del_rcu(&hdd->list);
 #endif
+		hdd->dev_t  = 0; /* disable search hits beyond this point */
+
 		synchronize_rcu(); /* wait for references to quiesce */
 		while(atomic_read(&hdd->io_pending))
 			schedule();
 		while(atomic_read(&hdd->nr_ref))
 			schedule();
+
+		gctx.nr_hdd--;
 	}
 
 	if (hdd->io_queue)
@@ -362,7 +366,6 @@ void _hdd_remove(struct hdd_info * hdd)
 
 	_unload_hdd(hdd);
 	kobject_put(&hdd->kobj);
-	gctx.nr_hdd--;
 	printk("iostash: %s has been successfully removed.\n",
 		hdd->path);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
