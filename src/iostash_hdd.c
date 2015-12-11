@@ -112,8 +112,6 @@ static void _unload_hdd(struct hdd_info * hdd)
 		/* we delete in place in older kernels */
 		list_del_rcu(&hdd->list);
 #endif
-		hdd->dev_t  = 0; /* disable search hits beyond this point */
-
 		synchronize_rcu(); /* wait for references to quiesce */
 		while(atomic_read(&hdd->io_pending))
 			schedule();
@@ -244,16 +242,34 @@ int hdd_register(char *path)
 		}
 		printk("Trying to get %s\n", path);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+		/* cache from the whole device, the make_request_fn
+		 * pointer we are hijacking is for the whole device,
+		 * not just the partition */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
 		hdd->bdev = blkdev_get_by_path(path, FMODE_READ | FMODE_WRITE,
-				       IOSTASH_NAME);
+				       IOSTASH_HDD_NAME);
+		if (!IS_ERR(hdd->bdev) && hdd->bdev->bd_contains && hdd->bdev->bd_contains != hdd->bdev) {
+			const dev_t dev_t = hdd->bdev->bd_contains->bd_dev;
+			struct block_device *const whole =  blkdev_get_by_dev(dev_t, FMODE_READ | FMODE_WRITE,
+				       IOSTASH_HDD_NAME);
+			blkdev_put(hdd->bdev, FMODE_READ | FMODE_WRITE);
+			hdd->bdev = whole;
+		}
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
 		hdd->bdev = lookup_bdev(path);
 		if (!IS_ERR(hdd->bdev)) {
-			int err = blkdev_get(hdd->bdev, FMODE_READ | FMODE_WRITE);
-			if (0 != err) {
-				hdd->bdev = NULL;
+			const dev_t dev = hdd->bdev->bd_dev;
+			hdd->bdev = open_by_devnum(dev, FMODE_READ|FMODE_WRITE);
+			bdput(hdd->bdev);
+			if (IS_ERR(hdd->bdev)) {
+				printk("iostash: device open failed\n");
 				break;
+			}
+			if (hdd->bdev->bd_contains != hdd->bdev) {
+				const dev_t whole_dev = hdd->bdev->bd_contains->bd_dev;
+				struct block_device *const whole =  open_by_devnum(whole_dev, FMODE_READ|FMODE_WRITE);
+				blkdev_put(hdd->bdev, FMODE_READ | FMODE_WRITE);
+				hdd->bdev = whole;
 			}
 		}
 #else
@@ -266,32 +282,28 @@ int hdd_register(char *path)
 			break;
 		}
 
+		rmb();
+		if (hdd->bdev->bd_holder) {
+			printk("iostash: HDD owned exclusively \n");
+			break;
+		}
+
 		printk("bdev %p opened for path %s.\n", hdd->bdev, path);
 
 		if (hdd->bdev->bd_disk->queue->make_request_fn == iostash_mkrequest) {
 			printk("iostash: driver is already installed\n");
 			break;
 		}
-		hdd->nr_sctr =
-		    to_sector(hdd->bdev->bd_contains->bd_inode->i_size);
-		hdd->part_start = hdd->bdev->bd_part->start_sect;
-
-#ifdef iostash_ADJUST_ALIGNMENT
-		if (hdd->part_start % SCE_SCTRPERPAGE) {
-			printk
-			    ("iostash: miss-aligned partition will be adjusted, before %ld\n",
-			     (long)hdd->part_start);
-			hdd->part_start += SCE_SCTRPERPAGE - 1;
-			hdd->part_start /= SCE_SCTRPERPAGE;
-			hdd->part_start *= SCE_SCTRPERPAGE;
-			printk
-			    ("iostash: miss-aligned partition will be adjusted, after %ld\n",
-			     (long)hdd->part_start);
-		}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+		hdd->nr_sctr = get_capacity(hdd->bdev->bd_disk);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+		hdd->nr_sctr = hdd->bdev->bd_part->nr_sects;
+#else
+		hdd->nr_sctr = part_nr_sects_read(hdd->bdev->bd_part);
 #endif
-
-		hdd->part_end =
-		    hdd->part_start + hdd->bdev->bd_part->nr_sects - 1;
+		/* TODO: support caching from partitions */
+		hdd->part_start = 0;
+		hdd->part_end = hdd->part_start + hdd->nr_sctr - 1;
 
 		printk("iostash: hdd->nr_sctr    = %ld\n", (long)hdd->nr_sctr);
 		printk("iostash: hdd->part_start = %ld\n",
@@ -311,7 +323,7 @@ int hdd_register(char *path)
 			break;
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36)
 		hdd->io_queue = alloc_workqueue("kiostashd", WQ_MEM_RECLAIM, 1);
 #else
 		hdd->io_queue = create_singlethread_workqueue("kiostashd");
@@ -383,12 +395,14 @@ void hdd_unregister_by_hdd(struct hdd_info *hdd)
 void hdd_unregister(char *path)
 {
 	struct block_device *const bdev = lookup_bdev(path);
+	dev_t dev_t = 0;
 	printk("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))
 		return;
+	dev_t = bdev->bd_dev;
 	bdput(bdev);
 	mutex_lock(&gctx.ctl_mtx);
-	_hdd_remove(_search_hdd(bdev->bd_dev));
+	_hdd_remove(_search_hdd(dev_t));
 	mutex_unlock(&gctx.ctl_mtx);
 }
 

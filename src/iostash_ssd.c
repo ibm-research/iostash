@@ -116,7 +116,7 @@ static void _unload_ssd(struct ssd_info * ssd)
 	}
 
 	if (ssd->bdev) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
 		blkdev_put(ssd->bdev,
 			   FMODE_READ | FMODE_WRITE);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
@@ -222,12 +222,12 @@ int ssd_register(char *path)
 			break;
 		}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,0,0)
-		ssd->bdev = blkdev_get_by_path(path, FMODE_READ | FMODE_WRITE,
-				       IOSTASH_NAME);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
+		ssd->bdev = blkdev_get_by_path(path, FMODE_READ | FMODE_WRITE | FMODE_EXCL,
+				       IOSTASH_SSD_NAME);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
-		ssd->bdev = open_bdev_exclusive(path, FMODE_READ | FMODE_WRITE,
-				       IOSTASH_NAME);
+		ssd->bdev = open_bdev_exclusive(path, FMODE_READ | FMODE_WRITE | FMODE_EXCL,
+				       IOSTASH_SSD_NAME);
 #else
 		printk("Kernel version < 2.6.28 currently not supported.\n");
 		ssd->bdev = ERR_PTR(-ENOENT);
@@ -237,9 +237,26 @@ int ssd_register(char *path)
 			ssd->bdev = NULL;
 			break;
 		}
+		rmb();
+		if (1 < ssd->bdev->bd_openers) {
+			printk("iostash: the SSD device is in use by %d openers, cannot open it exclusively\n",
+				ssd->bdev->bd_openers);
+			break;
+		}
 
-		ssd->nr_sctr =
-		    to_sector(ssd->bdev->bd_inode->i_size - IOSTASH_HEADERSIZE);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
+		ssd->nr_sctr = get_capacity(ssd->bdev->bd_disk);
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0)
+		ssd->nr_sctr = ssd->bdev->bd_part->nr_sects;
+#else
+		ssd->nr_sctr = part_nr_sects_read(ssd->bdev->bd_part);
+#endif
+		if (ssd->nr_sctr < IOSTASH_HEADERSCT) {
+			printk("SSD capacity less than minimum size of %uB", IOSTASH_HEADERSIZE);
+			break;
+		}
+		ssd->nr_sctr -= IOSTASH_HEADERSCT;
+
 		printk("iostash: ssd->nr_sctr = %ld\n", (long)ssd->nr_sctr);
 
 		ssd->cdev = sce_addcdev(gctx.sce, ssd->nr_sctr, ssd);

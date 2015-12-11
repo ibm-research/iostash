@@ -300,6 +300,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 		ERR("Request holding a dangling make_Request_fn pointer\n.");
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+		rmb();		/* read the change in make_request_fn */
 		return -EAGAIN; /* retry */
 #else
 		/* no retry possible in newer kernels since the return
@@ -390,9 +391,10 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 		if (ssd->online)
 			atomic_inc(&ssd->nr_ref);
 		rcu_read_unlock();
-		if (!ssd->online)
+		if (!ssd->online) {
+			atomic_dec(&ssd->nr_ref);
 			break;
-
+		}
 
 		/* cache hit */
 		io = _io_alloc(hdd, ssd, fmap.fragnum, bio, psn);

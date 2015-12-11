@@ -54,14 +54,13 @@
 #include "sce.h"
 #include "pdm.h"
 
-#define IOSTASH_NAME           "iostash"
+#define IOSTASH_SSD_NAME           "iostash_ssd"
+#define IOSTASH_HDD_NAME           "iostash_hdd"
 
 /* these are for sysfs */
 #define CTL_KOBJ_NAME          "iostash-ctl"
 #define SSD_KSET_NAME          "caches"
 #define HDD_KSET_NAME          "targets"
-
-#define IOSTASH_ADJUST_ALIGNMENT
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
 #define BIO_SECTOR(bio)     ((bio)->bi_iter.bi_sector)
