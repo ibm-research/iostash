@@ -385,8 +385,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 			break;
 		}
 		ssd = (struct ssd_info *)fmap.cdevctx;
-		if (ssd->online)
-			atomic_inc(&ssd->nr_ref);
+		atomic_inc(&ssd->nr_ref);
 		rcu_read_unlock();
 		if (!ssd->online) {
 			atomic_dec(&ssd->nr_ref);

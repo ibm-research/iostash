@@ -31,7 +31,7 @@
 #include <linux/rculist.h>
 
 /* assumes it's called from within an rcu read-side critical section,
- * or ctl_mtx is held while doing a search in an update operations */
+ * or ctl_mtx is held while doing a search in update operations */
 static struct ssd_info *_search_ssd(const dev_t dev_t)
 {
 	struct ssd_info *p;
@@ -97,22 +97,22 @@ static void _unload_ssd(struct ssd_info * ssd)
 	if (NULL == ssd)
 		return;
 
-	/* make offline */
+	/* first remove it from the set of cache devices, no more
+	 * requests will be queued to this device beyond this point */
+	if (ssd->cdev) {
+		sce_rmcdev(ssd->cdev);
+		ssd->cdev = NULL;
+	}
+
+	/* make offline and quiesce requests already in flight */
 	if (ssd->online) {
 		ssd->online = 0;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
-		/* we delete in place in older kernels */
 		list_del_rcu(&ssd->list);
-#endif
 		wmb();
 		synchronize_rcu(); /* wait for references to quiesce */
 		while(atomic_read(&ssd->nr_ref))
 			schedule();
-	}
-
-	if (ssd->cdev) {
-		sce_rmcdev(ssd->cdev);
-		ssd->cdev = NULL;
+		gctx.nr_ssd--;
 	}
 
 	if (ssd->bdev) {
@@ -290,24 +290,26 @@ int ssd_register(char *path)
 /* assumes ctl_mtx is held */
 void _ssd_remove(struct ssd_info *ssd)
 {
+	if (NULL == ssd)
+		return;
+
 	_unload_ssd(ssd);
 	kobject_put(&ssd->kobj);
-	gctx.nr_ssd--;
 	DBG("iostash: %s has been removed successfully\n", ssd->path);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 	kfree(ssd);
-#endif
 }
 
 void ssd_unregister(char *path)
 {
 	struct block_device *const bdev = lookup_bdev(path);
+	dev_t dev_t = 0;
 	DBG("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))
 		return;
+	dev_t = bdev->bd_dev;
 	bdput(bdev);
 	mutex_lock(&gctx.ctl_mtx);
-	_ssd_remove(_search_ssd(bdev->bd_dev));
+	_ssd_remove(_search_ssd(dev_t));
 	mutex_unlock(&gctx.ctl_mtx);
 }
 
@@ -315,9 +317,6 @@ void ssd_unregister_all(void)
 {
 	int i;
 	struct ssd_info *ssd, *q;
-#if KERNEL_VERSION(3,2,0) <= LINUX_VERSION_CODE
-	LIST_HEAD(l);
-#endif
 
 	mutex_lock(&gctx.ctl_mtx);
 	for (i = 0; i < IOSTASH_MAXSSD_BCKTS; ++i)
@@ -325,21 +324,9 @@ void ssd_unregister_all(void)
 		struct list_head *const b = &gctx.ssdtbl.bucket[i];
 		list_for_each_entry_safe(ssd, q, b, list) {
 			_ssd_remove(ssd);
-#if KERNEL_VERSION(3,2,0) <= LINUX_VERSION_CODE
-			list_del_rcu(&ssd->list);
-			synchronize_rcu();
-			list_add_tail(&ssd->list, &l);
-#endif
 		}
 	}
 	DBG("iostash: all SSDs have been removed.\n");
 
-#if KERNEL_VERSION(3,2,0) <= LINUX_VERSION_CODE
-	rcu_barrier();
-	list_for_each_entry_safe(ssd, q, &l, list) {
-		list_del(&ssd->list);
-		kfree(ssd);
-	}
-#endif
 	mutex_unlock(&gctx.ctl_mtx);
 }
