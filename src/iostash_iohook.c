@@ -68,7 +68,7 @@ static void _endio4read(struct bio *clone, int error)
 				break;
 			}
 
-			sce_put4read(hdd->lun, io->psn, to_sector(BIO_SIZE(clone)));
+			sce_put4read(hdd->lun, io->psn, io->nr_sctr);
 			gctx.st_cread++;
 			break;
 		}
@@ -118,6 +118,7 @@ static struct iostash_bio *_io_alloc(struct hdd_info * hdd, struct ssd_info * ss
 		io->fragnum = fragnum;
 		io->base_bio = bio;
 		io->psn = psn;
+		io->nr_sctr = to_sector(BIO_SIZE(bio));
 		io->error = 0;
 		io->ssd_werr = 0;	/* SSD write error */
 		atomic_set(&io->io_pending, 0);
@@ -177,8 +178,7 @@ static void _dec_pending(struct iostash_bio *io)
 #ifdef SCE_AWT
 		if (bio_data_dir(base_bio) != READ) {
 			sce_put4write(hdd->lun, io->psn,
-				      to_sector(BIO_SIZE(base_bio)),
-				      io->ssd_werr | io->error);
+				io->nr_sctr, io->ssd_werr | io->error);
 			gctx.st_awt++;
 		}
 #endif
@@ -221,8 +221,7 @@ static void _io_worker(struct work_struct *work)
 
 				/* when bio cannot be initialized for SSD for some reason flow to HDD */
 				bio_put(clone4ssd);
-				sce_put4read(hdd->lun, io->psn,
-					to_sector(BIO_SIZE(base_bio)));
+				sce_put4read(hdd->lun, io->psn, io->nr_sctr);
 			}
 			hddendfunc = _endio4read;
 		} else {	/* Write handling */

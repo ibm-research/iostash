@@ -174,6 +174,7 @@ struct iostash_bio
 	struct ssd_info *ssd;
 	struct bio *base_bio;
 	uint32_t fragnum;
+	uint32_t nr_sctr;
 	struct work_struct work;
 	atomic_t io_pending;
 	int error;
