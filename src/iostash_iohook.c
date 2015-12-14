@@ -369,6 +369,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 			break;
 		}
 
+
 		/* Read handling */
 		gctx.st_read++;
 
@@ -386,7 +387,9 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 		ssd = (struct ssd_info *)fmap.cdevctx;
 		atomic_inc(&ssd->nr_ref);
 		rcu_read_unlock();
-		if (!ssd->online) {
+		/* make sure the request is within the SSD limits and the SSD is online */
+		if (!ssd->online || ssd->queue_max_hw_sectors < nr_sctr) {
+			sce_put4read(hdd->lun, psn, nr_sctr);
 			atomic_dec(&ssd->nr_ref);
 			break;
 		}

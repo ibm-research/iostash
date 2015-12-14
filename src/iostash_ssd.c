@@ -257,6 +257,12 @@ int ssd_register(char *path)
 
 		DBG("iostash: ssd->nr_sctr = %ld\n", (long)ssd->nr_sctr);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31)
+		ssd->queue_max_hw_sectors = queue_max_hw_sectors(bdev_get_queue(ssd->bdev));
+#else
+		/* 2.6.29 and 2.6.30 */
+		ssd->queue_max_hw_sectors = (bdev_get_queue(ssd->bdev))->max_hw_sectors;
+#endif
 		ssd->cdev = sce_addcdev(gctx.sce, ssd->nr_sctr, ssd);
 		if (ssd->cdev == NULL) {
 			ERR("iostash: sce_add_device() failed.\n");

@@ -99,6 +99,7 @@ struct ssd_info
 	sector_t nr_sctr;
 	sce_cdevhndl_t cdev;
 	int online;
+	unsigned int queue_max_hw_sectors;
 	atomic_t nr_ref;
 };
 
