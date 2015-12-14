@@ -54,9 +54,6 @@
 #include "sce.h"
 #include "pdm.h"
 
-#define IOSTASH_SSD_NAME           "iostash_ssd"
-#define IOSTASH_HDD_NAME           "iostash_hdd"
-
 /* these are for sysfs */
 #define CTL_KOBJ_NAME          "iostash-ctl"
 #define SSD_KSET_NAME          "caches"
