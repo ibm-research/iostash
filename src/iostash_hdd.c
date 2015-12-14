@@ -138,7 +138,7 @@ static void _unload_hdd(struct hdd_info * hdd)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
 		blkdev_put(hdd->bdev, FMODE_READ | FMODE_WRITE);
 #else
-		printk("Kernel version < 2.6.28 currently not supported.\n");
+		ERR("Kernel version < 2.6.28 currently not supported.\n");
 #endif
 	}
 	hdd->bdev = NULL;
@@ -200,7 +200,7 @@ static const struct sysfs_ops hdd_sysfs_ops = {
 
 static void hdd_kobj_release( struct kobject *kobj )
 {
-        printk("released: %s\n", kobject_name(kobj));
+        DBG("released: %s\n", kobject_name(kobj));
 }
 
 int _hdd_create_kobj(struct hdd_info *hdd)
@@ -228,7 +228,6 @@ int _hdd_create_kobj(struct hdd_info *hdd)
 
 /* KObject section ends here */
 
-
 int hdd_register(char *path)
 {
 	struct hdd_info *hdd;
@@ -237,10 +236,10 @@ int hdd_register(char *path)
 	do {
 		hdd = _alloc_hdd(path);
 		if (!hdd) {
-			printk("iostash: No more HDD\n");
+			ERR("iostash: could not allocate hdd_info struct.\n");
 			break;
 		}
-		printk("Trying to get %s\n", path);
+		DBG("Trying to get %s\n", path);
 
 		/* cache from the whole device, the make_request_fn
 		 * pointer we are hijacking is for the whole device,
@@ -262,7 +261,7 @@ int hdd_register(char *path)
 			hdd->bdev = open_by_devnum(dev, FMODE_READ|FMODE_WRITE);
 			bdput(hdd->bdev);
 			if (IS_ERR(hdd->bdev)) {
-				printk("iostash: device open failed\n");
+				ERR("iostash: device open failed for %s.\n", path);
 				break;
 			}
 			if (hdd->bdev->bd_contains != hdd->bdev) {
@@ -273,25 +272,25 @@ int hdd_register(char *path)
 			}
 		}
 #else
-		printk("Kernel version < 2.6.28 currently not supported.\n");
+		ERR("Kernel version < 2.6.28 currently not supported.\n");
 		hdd->bdev = ERR_PTR(-ENOENT);
 #endif
 		if (IS_ERR(hdd->bdev)) {
-			printk("iostash: device lookup failed\n");
+			ERR("iostash: device lookup failed\n");
 			hdd->bdev = NULL;
 			break;
 		}
 
 		rmb();
 		if (hdd->bdev->bd_holder) {
-			printk("iostash: HDD owned exclusively \n");
+			ERR("iostash: HDD owned exclusively \n");
 			break;
 		}
 
-		printk("bdev %p opened for path %s.\n", hdd->bdev, path);
+		ERR("bdev %p opened for path %s.\n", hdd->bdev, path);
 
 		if (hdd->bdev->bd_disk->queue->make_request_fn == iostash_mkrequest) {
-			printk("iostash: driver is already installed\n");
+			ERR("iostash: driver is already installed\n");
 			break;
 		}
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
@@ -305,21 +304,21 @@ int hdd_register(char *path)
 		hdd->part_start = 0;
 		hdd->part_end = hdd->part_start + hdd->nr_sctr - 1;
 
-		printk("iostash: hdd->nr_sctr    = %ld\n", (long)hdd->nr_sctr);
-		printk("iostash: hdd->part_start = %ld\n",
+		DBG("iostash: hdd->nr_sctr    = %ld\n", (long)hdd->nr_sctr);
+		DBG("iostash: hdd->part_start = %ld\n",
 		       (long)hdd->part_start);
-		printk("iostash: hdd->part_end   = %ld\n", (long)hdd->part_end);
+		DBG("iostash: hdd->part_end   = %ld\n", (long)hdd->part_end);
 
 		hdd->io_pool =
 		    mempool_create_slab_pool(IOSTASH_MINIOS, gctx.io_pool);
 		if (hdd->io_pool == NULL) {
-			printk("iostash: failed to create io pool\n");
+			ERR("iostash: failed to create io pool\n");
 			break;
 		}
 
 		hdd->bs = bioset_create(IOSTASH_MINIOS, 0);
 		if (!hdd->bs) {
-			printk("iostash: failed to create bioset\n");
+			ERR("iostash: failed to create bioset\n");
 			break;
 		}
 
@@ -329,19 +328,19 @@ int hdd_register(char *path)
 		hdd->io_queue = create_singlethread_workqueue("kiostashd");
 #endif
 		if (!hdd->io_queue) {
-			printk("iostash: failed to create workqueue\n");
+			ERR("iostash: failed to create workqueue\n");
 			break;
 		}
 
 		hdd->lun = sce_addlun(gctx.sce, hdd->nr_sctr, hdd);
 		if (hdd->lun == NULL) {
-			printk("iostash: sce_addlun() failed \n");
+			ERR("iostash: sce_addlun() failed \n");
 			break;
 		}
 
 		ret = _hdd_create_kobj(hdd);
 		if (ret) {
-			printk("hdd_create_kobj failed with %d\n", ret);
+			ERR("hdd_create_kobj failed with %d\n", ret);
 			break;
 		}
 
@@ -359,7 +358,7 @@ int hdd_register(char *path)
 		gctx.nr_hdd++;
 		ret = 0;
 
-		printk("iostash: HDD %s has been added successfully\n", path);
+		DBG("iostash: HDD %s has been added successfully\n", path);
 	} while (0);
 
 	if (ret)
@@ -378,7 +377,7 @@ void _hdd_remove(struct hdd_info * hdd)
 
 	_unload_hdd(hdd);
 	kobject_put(&hdd->kobj);
-	printk("iostash: %s has been successfully removed.\n",
+	DBG("iostash: %s has been successfully removed.\n",
 		hdd->path);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 	kfree(hdd);
@@ -396,7 +395,7 @@ void hdd_unregister(char *path)
 {
 	struct block_device *const bdev = lookup_bdev(path);
 	dev_t dev_t = 0;
-	printk("bdev %p found for path %s.\n", bdev, path);
+	DBG("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))
 		return;
 	dev_t = bdev->bd_dev;
@@ -428,7 +427,7 @@ void hdd_unregister_all(void)
 #endif
 		}
 	}
-	printk("iostash: wait all HDDs are deleted\n");
+	DBG("iostash: removing all targets\n.");
 
 #if KERNEL_VERSION(3,2,0) <= LINUX_VERSION_CODE
 	rcu_barrier();

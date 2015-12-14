@@ -46,7 +46,7 @@ static char *_chkcmd(const char *cmdline, char *cmd)
 		for (p = arg; (*p != '\0') && (*p > ' '); p++) ;
 		*p = '\0';
 
-		printk("iostash: Command[%s] Argument[%s]\n", cmd, arg);
+		DBG("iostash: Command[%s] Argument[%s]\n", cmd, arg);
 	}
 
 	return arg;
@@ -74,7 +74,7 @@ static ssize_t caches_store(struct kobject *kobj, const char *buffer, size_t siz
 	else if ((arg = _chkcmd(buffer, "rm")) != NULL)
 		ssd_unregister(arg);
 	else
-		printk("Unknown store to %s\n", kobject_name(kobj));
+		ERR("Unknown kobject store to %s\n", kobject_name(kobj));
 
 	return size;
 }
@@ -93,7 +93,7 @@ static ssize_t targets_store(struct kobject *kobj, const char *buffer, size_t si
 	else if ((arg = _chkcmd(buffer, "rm")) != NULL)
 		hdd_unregister(arg);
 	else
-		printk("Unknown store to %s\n", kobject_name(kobj));
+		ERR("Unknown kobject store to %s\n", kobject_name(kobj));
 
 	return size;
 }
@@ -161,7 +161,7 @@ static const struct sysfs_ops ctl_sysfs_ops =
 
 static void ctl_kobj_release(struct kobject *kobj)
 {
-        printk("released: %s\n", kobject_name(kobj));
+        DBG("released: %s\n", kobject_name(kobj));
 }
 
 static int _init_iostash_kobjects(void)
@@ -257,35 +257,35 @@ static int __init iostash_init(void)
     int ret = -1, i;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,28)
-	printk("Kernel version < 2.6.28 not supported.");
+	ERR("Kernel version < 2.6.28 not supported.");
 	return -ENOENT;
 #endif
-	printk("++ iostash_init() ++\n");
+	DBG("++ iostash_init() ++\n");
 
 	memset(&gctx, 0, sizeof(gctx));
 	do {
 		gctx.io_pool = KMEM_CACHE(iostash_bio, 0);
 		if (!gctx.io_pool) {
-			printk("iostash_init: KMEM_CACHE() failed\n");
+			ERR("iostash_init: KMEM_CACHE() failed\n");
 			break;
 		}
 
 		gctx.io_client = dm_io_client_create();
 		if (IS_ERR(gctx.io_client)) {
-			printk("iostash_init: dm_io_client() failed\n");
+			ERR("iostash_init: dm_io_client() failed\n");
 			break;
 		}
 
 		gctx.sce = sce_create();
 		if (!gctx.sce) {
-			printk("iostash_init: sce_create() failed\n");
+			ERR("iostash_init: sce_create() failed\n");
 			break;
 		}
 
 		gctx.pdm = pdm_create(gctx.sce, poptask_read, poptask_write);
 
 		if (_init_iostash_kobjects()) {
-		    printk("KOBJECT INIT FAILED!");
+		    ERR("KOBJECT INIT FAILED!");
 		    _destroy_iostash_kobjects();
 		}
 
@@ -305,16 +305,16 @@ static int __init iostash_init(void)
 		_free_resource();
 	}
 
-	printk("-- iostash_init() returns = %d --\n", ret);
+	DBG("-- iostash_init() returns = %d --\n", ret);
 	return ret;
 }
 
 static void iostash_exit(void)
 {
-	printk("++ iostash_exit() ++\n");
+	DBG("++ iostash_exit() ++\n");
 	_free_resource();
 	_destroy_iostash_kobjects();
-	printk("-- iostash_exit() ++\n");
+	DBG("-- iostash_exit() ++\n");
 }
 
 module_init(iostash_init);

@@ -123,7 +123,7 @@ static void _unload_ssd(struct ssd_info * ssd)
 		close_bdev_exclusive(ssd->bdev,
 				     FMODE_READ | FMODE_WRITE);
 #else
-		printk("Kernel version < 2.6.28 currently not supported.\n");
+		ERR("Kernel version < 2.6.28 currently not supported.\n");
 #endif
 		ssd->bdev = NULL;
 	}
@@ -181,7 +181,7 @@ static const struct sysfs_ops ssd_sysfs_ops = {
 
 static void ssd_kobj_release( struct kobject *kobj )
 {
-        printk("released: %s\n", kobject_name(kobj));
+        DBG("released: %s\n", kobject_name(kobj));
 }
 
 int _ssd_create_kobj(struct ssd_info *ssd)
@@ -218,7 +218,7 @@ int ssd_register(char *path)
 	do {
 		ssd = _alloc_ssd(path);
 		if (!ssd) {
-			printk("iostash: No more SSD\n");
+			ERR("iostash: Could not allocate ssd_info struct.\n");
 			break;
 		}
 
@@ -229,18 +229,17 @@ int ssd_register(char *path)
 		ssd->bdev = open_bdev_exclusive(path, FMODE_READ | FMODE_WRITE | FMODE_EXCL,
 				       IOSTASH_SSD_NAME);
 #else
-		printk("Kernel version < 2.6.28 currently not supported.\n");
+		ERR("Kernel version < 2.6.28 currently not supported.\n");
 		ssd->bdev = ERR_PTR(-ENOENT);
 #endif
 		if (IS_ERR(ssd->bdev)) {
-			printk("iostash: device lookup failed\n");
+			ERR("iostash: SSD device lookup failed.\n");
 			ssd->bdev = NULL;
 			break;
 		}
 		rmb();
 		if (1 < ssd->bdev->bd_openers) {
-			printk("iostash: the SSD device is in use by %d openers, cannot open it exclusively\n",
-				ssd->bdev->bd_openers);
+			ERR("iostash: the SSD device is in use, cannot open it exclusively.\n");
 			break;
 		}
 
@@ -252,22 +251,22 @@ int ssd_register(char *path)
 		ssd->nr_sctr = part_nr_sects_read(ssd->bdev->bd_part);
 #endif
 		if (ssd->nr_sctr < IOSTASH_HEADERSCT) {
-			printk("SSD capacity less than minimum size of %uB", IOSTASH_HEADERSIZE);
+			ERR("SSD capacity less than minimum size of %uB", IOSTASH_HEADERSIZE);
 			break;
 		}
 		ssd->nr_sctr -= IOSTASH_HEADERSCT;
 
-		printk("iostash: ssd->nr_sctr = %ld\n", (long)ssd->nr_sctr);
+		DBG("iostash: ssd->nr_sctr = %ld\n", (long)ssd->nr_sctr);
 
 		ssd->cdev = sce_addcdev(gctx.sce, ssd->nr_sctr, ssd);
 		if (ssd->cdev == NULL) {
-			printk("iostash: sce_add_device() failed \n");
+			ERR("iostash: sce_add_device() failed.\n");
 			break;
 		}
 
 		ret = _ssd_create_kobj(ssd);
 		if (ret) {
-			printk("ssd_create_kobj failed with %d\n", ret);
+			ERR("ssd_create_kobj failed with %d.\n", ret);
 			break;
 		}
 
@@ -276,7 +275,7 @@ int ssd_register(char *path)
 
 		ssd->online = 1;
 		gctx.nr_ssd++;
-		printk("iostash: SSD %s has been added successfully\n", path);
+		DBG("iostash: SSD %s has been added successfully.\n", path);
 
 		ret = 0;
 	} while (0);
@@ -295,7 +294,7 @@ void _ssd_remove(struct ssd_info *ssd)
 	_unload_ssd(ssd);
 	kobject_put(&ssd->kobj);
 	gctx.nr_ssd--;
-	printk("iostash: %s has been removed successfully\n", ssd->path);
+	DBG("iostash: %s has been removed successfully\n", ssd->path);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 	kfree(ssd);
 #endif
@@ -304,7 +303,7 @@ void _ssd_remove(struct ssd_info *ssd)
 void ssd_unregister(char *path)
 {
 	struct block_device *const bdev = lookup_bdev(path);
-	printk("bdev %p found for path %s.\n", bdev, path);
+	DBG("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))
 		return;
 	bdput(bdev);
@@ -334,7 +333,7 @@ void ssd_unregister_all(void)
 #endif
 		}
 	}
-	printk("iostash: wait all SSDs are deleted\n");
+	DBG("iostash: all SSDs have been removed.\n");
 
 #if KERNEL_VERSION(3,2,0) <= LINUX_VERSION_CODE
 	rcu_barrier();

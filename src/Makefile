@@ -48,8 +48,8 @@ iostash-y +=	iostash_module.o \
 
 # Note, PWD will point to COMPONENT_DIR when we enter here (2nd Makefile invocation)
 EXTRA_CFLAGS := $(INCLUDES) -D_LINUX -g -Wall -Werror
-EXTRA_CFLAGS += -I$(KERNEL_TREE)/drivers/md -I./ -I$(COMPONENT_DIR)/	 
-EXTRA_CFLAGS += -I$(KERNEL_TREE)/include/ -I$(KERNEL_TREE)/include/linux 
+EXTRA_CFLAGS += -I$(KERNEL_TREE)/drivers/md -I./ -I$(COMPONENT_DIR)/
+EXTRA_CFLAGS += -I$(KERNEL_TREE)/include/ -I$(KERNEL_TREE)/include/linux
 
 #CFLAGS_iostash_iohook.o += -DDEBUG
 #CFLAGS_sce_cachedev.o += -DDEBUG
@@ -83,7 +83,7 @@ KERNELDIR := ${KERNEL_DIR}
 
 # Things we need to have in the build dir
 COMPONENT_BUILD_DIR=$(PROJ_DIR)/$(OBJ_BUILD_DIR)/$(COMPONENT)
-COMPONENT_BUILD_MAKEFILE=$(addprefix $(COMPONENT_BUILD_DIR)/, Makefile)
+COMPONENT_BUILD_MAKEFILE=$(addprefix $(COMPONENT_BUILD_DIR), Makefile)
 
 default: $(COMPONENT_BUILD_DIR) c_file_links $(COMPONENT_BUILD_MAKEFILE)
 	$(MAKE) -C $(KERNELDIR) M=$(COMPONENT_BUILD_DIR) COMPONENT_DIR=$(COMPONENT_DIR) modules
@@ -94,7 +94,7 @@ $(COMPONENT_BUILD_DIR):
 
 # Link required files into build directory
 c_file_links: $(SRC_FILES) $(COMPONENT_BUILD_DIR)
-	$(LN) -f $(COMPONENT_DIR)/*.c $(COMPONENT_BUILD_DIR)/
+	$(LN) -f $(COMPONENT_DIR)/*.c $(COMPONENT_BUILD_DIR)
 
 $(COMPONENT_BUILD_MAKEFILE): Makefile $(COMPONENT_BUILD_DIR)
 	$(LN) -f $(COMPONENT_DIR)/$< $@

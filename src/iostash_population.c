@@ -68,7 +68,7 @@ int poptask_read(sce_poptask_t * poptask, char *fragbuf)
 	DBG("Finished read from hdd frag s=%lu len=%u", sctrnum, nr_sctr);
 
 	if (ret)
-		printk("poptask_read() returns %d", ret);
+		ERR("poptask_read() returned %d", ret);
 
 	return (ret) ? SCE_ERROR : SCE_SUCCESS;
 }

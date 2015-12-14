@@ -93,13 +93,11 @@ static void _endio4write(struct bio *clone, int error)
 
 	if (unlikely(error)) {
 		if (clone->bi_bdev != io->base_bio->bi_bdev) {
-			printk
-			    ("iostash: SSD write error happened: error = %d, sctr = %ld :::\n",
+			ERR("iostash: SSD write error: error = %d, sctr = %ld :::\n",
 			     error, io->psn);
 			io->ssd_werr = error;
 		} else {
-			printk
-			    ("iostash: HDD write error happened: error = %d, sctr = %ld :::\n",
+			ERR("iostash: HDD write error: error = %d, sctr = %ld :::\n",
 			     error, io->psn);
 			io->error = error;
 		}
@@ -312,7 +310,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 	}
 
 	if (!hdd->online) {
-		printk("request re-routed due to hdd not being online.\n");
+		ERR("request re-routed due to hdd not being online.\n");
 		/* being unloaded, re-route */
 		goto out;
 	}

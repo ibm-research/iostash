@@ -25,13 +25,14 @@
 
 #include "sce.h"
 #include "sce_internal.h"
+#include "helpers.h"
 
 /* ---------------------------------------------------------------------------------------- */
 /*                                  Fragment related                                        */
 /* ---------------------------------------------------------------------------------------- */
 
 /*
-    initialize a fragment structure before mapping 
+    initialize a fragment structure before mapping
  */
 int _frag_init(frag_t * frag)
 {
@@ -114,14 +115,11 @@ int _frag_invalidate(frag_t * frag, uint32_t pgnum, uint32_t pgcnt)
 	}
 #endif
 
-#ifdef _LINUX
 	if (frag->nr_valid < nr_invalidated)
 	{
-		printk(":::: Error: frag->nr_valid = %d, nr_invalidated = %d\n",
+		ERR(":::: Error: frag->nr_valid = %d, nr_invalidated = %d\n",
 		       frag->nr_valid, nr_invalidated);
 	}
-#endif
-
 
 	BUG_ON(frag->nr_valid < nr_invalidated);
 	frag->nr_valid -= (uint16_t) nr_invalidated;
