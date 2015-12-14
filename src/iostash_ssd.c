@@ -117,11 +117,9 @@ static void _unload_ssd(struct ssd_info * ssd)
 
 	if (ssd->bdev) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
-		blkdev_put(ssd->bdev,
-			   FMODE_READ | FMODE_WRITE);
+		blkdev_put(ssd->bdev, FMODE_READ | FMODE_WRITE | FMODE_EXCL);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
-		close_bdev_exclusive(ssd->bdev,
-				     FMODE_READ | FMODE_WRITE);
+		close_bdev_exclusive(ssd->bdev, FMODE_READ | FMODE_WRITE | FMODE_EXCL);
 #else
 		ERR("Kernel version < 2.6.28 currently not supported.\n");
 #endif
@@ -224,14 +222,15 @@ int ssd_register(char *path)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
 		ssd->bdev = blkdev_get_by_path(path, FMODE_READ | FMODE_WRITE | FMODE_EXCL,
-				       IOSTASH_SSD_NAME);
+					&gctx.ssdtbl);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28)
 		ssd->bdev = open_bdev_exclusive(path, FMODE_READ | FMODE_WRITE | FMODE_EXCL,
-				       IOSTASH_SSD_NAME);
+						&gctx.ssdtbl);
 #else
 		ERR("Kernel version < 2.6.28 currently not supported.\n");
 		ssd->bdev = ERR_PTR(-ENOENT);
 #endif
+
 		if (IS_ERR(ssd->bdev)) {
 			ERR("iostash: SSD device lookup failed.\n");
 			ssd->bdev = NULL;

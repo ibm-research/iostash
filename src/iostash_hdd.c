@@ -246,11 +246,11 @@ int hdd_register(char *path)
 		 * not just the partition */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
 		hdd->bdev = blkdev_get_by_path(path, FMODE_READ | FMODE_WRITE,
-				       IOSTASH_HDD_NAME);
+				       &gctx.hddtbl);
 		if (!IS_ERR(hdd->bdev) && hdd->bdev->bd_contains && hdd->bdev->bd_contains != hdd->bdev) {
 			const dev_t dev_t = hdd->bdev->bd_contains->bd_dev;
 			struct block_device *const whole =  blkdev_get_by_dev(dev_t, FMODE_READ | FMODE_WRITE,
-				       IOSTASH_HDD_NAME);
+				       &gctx.hddtbl);
 			blkdev_put(hdd->bdev, FMODE_READ | FMODE_WRITE);
 			hdd->bdev = whole;
 		}
@@ -258,15 +258,16 @@ int hdd_register(char *path)
 		hdd->bdev = lookup_bdev(path);
 		if (!IS_ERR(hdd->bdev)) {
 			const dev_t dev = hdd->bdev->bd_dev;
-			hdd->bdev = open_by_devnum(dev, FMODE_READ|FMODE_WRITE);
+			hdd->bdev = open_by_devnum(dev, FMODE_READ | FMODE_WRITE);
 			bdput(hdd->bdev);
 			if (IS_ERR(hdd->bdev)) {
 				ERR("iostash: device open failed for %s.\n", path);
+				hdd->bdev = NULL;
 				break;
 			}
 			if (hdd->bdev->bd_contains != hdd->bdev) {
 				const dev_t whole_dev = hdd->bdev->bd_contains->bd_dev;
-				struct block_device *const whole =  open_by_devnum(whole_dev, FMODE_READ|FMODE_WRITE);
+				struct block_device *const whole =  open_by_devnum(whole_dev, FMODE_READ | FMODE_WRITE);
 				blkdev_put(hdd->bdev, FMODE_READ | FMODE_WRITE);
 				hdd->bdev = whole;
 			}
