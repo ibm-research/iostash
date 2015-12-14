@@ -115,9 +115,7 @@ typedef struct cdev {
 	void *cdevctx;
 
 	uint32_t nr_frag;
-	uint32_t nr_fragtbl;
-
-	frag_t **fragtbls;
+	frag_t *fragtbl;
 } cdev_t;
 
 #define GET_LUNIDX(sce, lun)                    (uint16_t)((lun) - (sce->luntbl))
@@ -204,16 +202,6 @@ typedef struct sce {
 	void _frag_writeend(frag_t *frag, uint32_t pgnum, uint32_t pgcnt, bool failed);
 	void _frag_mergebitmap(frag_t *frag);
 	int _set_bitmap4awt(bitmap_t *, bitmap_t *, uint32_t, uint32_t);
-#endif
-
-#ifdef _SCE_CROSSTEST
-	int _check_bitmap(bitmap_t* bitmap, uint32_t pgnum, uint32_t pgcnt);
-
-#ifdef SCE_AWT
-	int _getabit(bitmap_t* bitmap, uint32_t pgnum);
-	void _setabit(bitmap_t* bitmap, uint32_t pgnum);
-	void _resetabit(bitmap_t* bitmap, uint32_t pgnum);
-#endif
 #endif
 
 /* Cache device (SSD) related */

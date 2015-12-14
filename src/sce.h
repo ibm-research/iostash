@@ -25,18 +25,12 @@
 #ifndef _SCE_H
 #define _SCE_H
 
-#ifndef _SCE_CROSSTEST
 #include <linux/types.h>
 #include <linux/slab.h>
 #include <linux/kthread.h>
 #include <linux/vmalloc.h>
 
 #define	PRIVATE                 static
-
-#else
-#include "sce_crosstest.h"
-#define	PRIVATE
-#endif
 
 #define SCE_BITS4DEV            (4)  /* support maximum 16 SSDs */
 #define SCE_MAXLUN              (256)

@@ -14,7 +14,7 @@ SCE_SOURCES =	$(SCE_DIR)sce_fragment.c \
 		$(SCE_DIR)sce_interface.c
 
 all: 
-	gcc -g -I$(SCE_DIR) -D_SCE_CROSSTEST -o sce_simultest sce_simultest.c $(SCE_SOURCES)
+	gcc -g -I$(SCE_DIR) -o sce_simultest sce_simultest.c $(SCE_SOURCES)
 
 clean:
 	rm -f sce_simultest

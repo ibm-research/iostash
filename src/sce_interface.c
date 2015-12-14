@@ -1,5 +1,5 @@
 /*
- * Flash cache solution iostash
+104 * Flash cache solution iostash
  *
  * Authors: Ioannis Koltsidas <iko@zurich.ibm.com>
  *          Nikolas Ioannou   <nio@zurich.ibm.com>
@@ -99,9 +99,9 @@ sce_cdevhndl_t sce_addcdev(sce_hndl_t scehndl, sector_t nr_sctr, void *cdctx)
 	spin_lock_irqsave(&sce->lock, flags);
 
 	for (cdev = sce->cdevtbl, devnum = 0;
-	     devnum < SCE_MAXCDEV; cdev++, devnum++) 
+	     devnum < SCE_MAXCDEV; cdev++, devnum++)
 	    {
-		    if (cdev->fragtbls == NULL)
+		    if (cdev->fragtbl == NULL)
 			    break;
 	    }
 

@@ -52,9 +52,7 @@ frag_t *_get_frag_advance_clockarm(sce_t * sce)
 			fragnum %= cdev->nr_frag;
 
 			/* get fragment */
-			frag =
-			    &cdev->fragtbls[fragnum / MAXFRAGS4FTBL][fragnum %
-								     MAXFRAGS4FTBL];
+			frag = &cdev->fragtbl[fragnum];
 
 			/* move arm */
 			if (++fragnum >= cdev->nr_frag) {

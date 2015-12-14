@@ -22,10 +22,10 @@ SCE_TESTS   =   $(TEST_DIR)sce_fragment_test.c \
 		$(TEST_DIR)sce_mapping_test.c \
 		$(TEST_DIR)sce_eviction_test.c \
 		$(TEST_DIR)sce_population_test.c \
-		$(TEST_DIR)sce_interface_test.c 
+		$(TEST_DIR)sce_interface_test.c
 
-all: 
-	gcc -g -I$(SCE_DIR) -D_SCE_CROSSTEST -o sce_test sce_test.c $(SCE_SOURCES) $(SCE_TESTS) -lcunit 
+all:
+	gcc -g -I$(SCE_DIR) -o sce_test sce_test.c $(SCE_SOURCES) $(SCE_TESTS) -lcunit
 
 clean:
 	rm -rf sce_test sce_test.dSYM

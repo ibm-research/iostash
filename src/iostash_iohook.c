@@ -58,8 +58,7 @@ static void _endio4read(struct bio *clone, int error)
 		if (clone->bi_bdev != io->base_bio->bi_bdev) {
 			DBG("SSD cloned bio endio.");
 			if (unlikely(error)) {	/* Error handling */
-				ERR
-				    ("iostash: SSD read error happened: error = %d, sctr = %ld :::\n",
+				ERR("iostash: SSD read error: error = %d, sctr = %ld :::\n",
 				     error, io->psn);
 				/* XXX: do not understand this one */
 				io->ssd->online = ssd_online_to_be;

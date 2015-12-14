@@ -30,29 +30,6 @@
 /*                            Cache device (SSD) related                                    */
 /* ---------------------------------------------------------------------------------------- */
 
-/*
-    _cdev_destroy(cdev_t* dev)
-        : free fragment descriptor table
- */
-int _cdev_destroy(cdev_t *cdev)
-{
-	int i;
-
-	if (!cdev)
-		return SCE_ERROR;
-
-	if (cdev->fragtbls) {
-		for (i = 0; i < (int)cdev->nr_fragtbl; i++) {
-			if (cdev->fragtbls[i])
-				kfree(cdev->fragtbls[i]);
-		}
-		kfree(cdev->fragtbls);
-	}
-	memset(cdev, 0, sizeof(cdev_t));
-
-	return SCE_SUCCESS;
-}
-
 int _cdev_search(sce_t * sce, void* cdevctx)
 {
 	cdev_t* cdev;
@@ -72,7 +49,6 @@ int _cdev_search(sce_t * sce, void* cdevctx)
 int _cdev_init(sce_t * sce, cdev_t * cdev, sector_t nr_sctr)
 {
 	uint32_t nr_frag;
-	uint32_t i, n;
 
 	if ((!sce) || (!cdev) || (nr_sctr < SCE_SCTRPERFRAG))
 		return SCE_ERROR;
@@ -86,34 +62,34 @@ int _cdev_init(sce_t * sce, cdev_t * cdev, sector_t nr_sctr)
 	/* calculate number of fragments */
 	cdev->nr_frag = nr_frag = (uint32_t)(nr_sctr / SCE_SCTRPERFRAG);
 
-	/* Because of max-memory allocation limitation, 
-	 * we have to separate fragment table into multiple pieces */
-	cdev->nr_fragtbl = (nr_frag + MAXFRAGS4FTBL - 1) / MAXFRAGS4FTBL;
-
-	cdev->fragtbls = (frag_t **)
-		kmalloc(sizeof(frag_t*) * cdev->nr_fragtbl, (GFP_KERNEL & ~__GFP_WAIT));
-
-	if (!cdev->fragtbls)
+	cdev->fragtbl = (frag_t *) vmalloc(sizeof(frag_t) * cdev->nr_frag);
+	if (!cdev->fragtbl)
 		goto error_out;
 
-	memset(cdev->fragtbls, 0, sizeof(frag_t *) * cdev->nr_fragtbl);
+	/* Initializing to 01010101's */
+	memset(cdev->fragtbl, 85, sizeof(frag_t) * cdev->nr_frag);
 
-	for (i = 0; i < cdev->nr_fragtbl; i++) {
-		n = (nr_frag > MAXFRAGS4FTBL) ? MAXFRAGS4FTBL : nr_frag;
-
-		cdev->fragtbls[i] =
-			(frag_t *)kmalloc(n * sizeof(frag_t), (GFP_KERNEL & ~__GFP_WAIT));
-
-		if (NULL == cdev->fragtbls[i])
-			goto error_out;
-
-		memset(cdev->fragtbls[i], 0, n * sizeof(frag_t));
-
-		nr_frag -= n;
-	}
 	return SCE_SUCCESS;
 
 error_out:
 	_cdev_destroy(cdev);
 	return SCE_ERROR;
+}
+
+/*
+    _cdev_destroy(cdev_t* dev)
+        : free fragment descriptor table
+ */
+int _cdev_destroy(cdev_t *cdev)
+{
+	if (!cdev)
+		return SCE_ERROR;
+
+	if (cdev->fragtbl) {
+		vfree(cdev->fragtbl);
+	}
+
+	memset(cdev, 0, sizeof(cdev_t));
+
+	return SCE_SUCCESS;
 }

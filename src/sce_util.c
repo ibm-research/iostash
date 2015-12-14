@@ -47,9 +47,8 @@ frag_t *_pfid2frag(sce_t * sce, pfid_t pfid, sce_fmap_t* out_fmap)
 		cdev = &sce->cdevtbl[devnum];
 		if (cdev) {
 			/* get fragment structure */
-			if ((cdev->fragtbls) && (fragnum < cdev->nr_frag)) {
-				frag = &cdev->fragtbls[fragnum /
-					MAXFRAGS4FTBL][fragnum % MAXFRAGS4FTBL];
+			if ((cdev->fragtbl) && (fragnum < cdev->nr_frag)) {
+				frag = &cdev->fragtbl[fragnum];
 				if (out_fmap) {
 					out_fmap->cdevctx = cdev->cdevctx;
 					out_fmap->fragnum = fragnum;
@@ -74,7 +73,7 @@ int _isvalidpfid(sce_t * sce, pfid_t pfid)
 
 	if ((sce) &&
 	    (devnum < SCE_MAXCDEV) &&
-	    (sce->cdevtbl[devnum].fragtbls) &&
+	    (sce->cdevtbl[devnum].fragtbl) &&
 	    (sce->cdevtbl[devnum].nr_frag > fragnum)) {
 		ret = SCE_SUCCESS;
 	}
