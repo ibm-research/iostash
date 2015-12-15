@@ -44,7 +44,7 @@ int _map_frag(lun_t * lun, uint32_t fragnum, pfid_t pfid)
 		/* validity check */
 		if (!lun)
 			break;
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 		if (fragnum >= lun->nr_frag)
 			break;
@@ -56,9 +56,7 @@ int _map_frag(lun_t * lun, uint32_t fragnum, pfid_t pfid)
 		if (SCE_SUCCESS != _isvalidpfid(sce, pfid))
 			break;
 
-		fdesc =
-		    lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							   MAXFRAGS4FMAP];
+		fdesc = lun->fragmap[fragnum];
 
 		/* if already mapped */
 		if ((fdesc & FRAGDESC_MAPPED) != 0)
@@ -98,8 +96,7 @@ int _map_frag(lun_t * lun, uint32_t fragnum, pfid_t pfid)
 		fdesc = FRAGDESC_MAPPED | (pfid & FRAGDESC_DATAMASK);
 
 		/* update mapping */
-		lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-						       MAXFRAGS4FMAP] = fdesc;
+		lun->fragmap[fragnum] = fdesc;
 
 		ret = SCE_SUCCESS;
 	} while (0);
@@ -122,7 +119,7 @@ int _unmap_frag(lun_t * lun, uint32_t fragnum)
 		/* validity check */
 		if (!lun)
 			break;
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 		if (fragnum >= lun->nr_frag)
 			break;
@@ -132,9 +129,7 @@ int _unmap_frag(lun_t * lun, uint32_t fragnum)
 			break;
 
 		/* get a fragment descriptor */
-		fdesc =
-		    lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							   MAXFRAGS4FMAP];
+		fdesc = lun->fragmap[fragnum];
 
 		/* if the fragment is mapped to a physical fragment */
 		if ((fdesc & FRAGDESC_MAPPED) == 0)
@@ -156,9 +151,7 @@ int _unmap_frag(lun_t * lun, uint32_t fragnum)
 			break;
 
 		/* update fragmap with heat information */
-		lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-						       MAXFRAGS4FMAP] =
-		    (nr_miss & FRAGDESC_DATAMASK);
+		lun->fragmap[fragnum] = (nr_miss & FRAGDESC_DATAMASK);
 
 		ret = SCE_SUCCESS;
 	} while (0);

@@ -33,31 +33,26 @@
  */
 int _lun_destroy(lun_t * lun)
 {
-	uint32_t i;
-	int ret = SCE_ERROR;
+	int err = 0;
 
-	if (lun) {
-		if (lun->fragmaps) {
-			for (i = 0; i < lun->nr_fragmap; i++) {
-				if (lun->fragmaps[i])
-					kfree(lun->fragmaps[i]);
-			}
-			kfree(lun->fragmaps);
-		}
-
-		lun->scehndl = NULL;
-		lun->fragmaps = NULL;
-		lun->lunctx = NULL;
-		lun->nr_fragmap = 0;
-		lun->nr_sctr = 0;
-		lun->nr_frag = 0;
-		lun->nr_service = 0;
-		lun->waiting4deletion = 0;
-
-		ret = SCE_SUCCESS;
+	if (!lun)
+	{
+		err = SCE_ERROR;
+		goto out;
 	}
 
-	return ret;
+	vfree(lun->fragmap);
+
+	lun->scehndl = NULL;
+	lun->fragmap = NULL;
+	lun->lunctx = NULL;
+	lun->nr_sctr = 0;
+	lun->nr_frag = 0;
+	lun->nr_service = 0;
+	lun->waiting4deletion = 0;
+
+out:
+	return err;
 }
 
 
@@ -79,11 +74,9 @@ int _lun_search(sce_t * sce, void* lunctx)
 int _lun_init(sce_t * sce, lun_t * lun, sector_t nr_sctr)
 {
 	uint32_t nr_frag;
-	uint32_t i;
-	uint32_t n;
-	int ret = SCE_ERROR;
+	int err = 0;
 
-	if ((sce) && (lun) && (lun->fragmaps == NULL) && (nr_sctr > 0)) {
+	if ((sce) && (lun) && (lun->fragmap == NULL) && (nr_sctr > 0)) {
 		/* set sce handle */
 		lun->scehndl = (sce_hndl_t) sce;
 
@@ -92,37 +85,21 @@ int _lun_init(sce_t * sce, lun_t * lun, sector_t nr_sctr)
 		/* set LUN size */
 		lun->nr_sctr = nr_sctr;
 		lun->nr_frag = nr_frag =
-		    (uint32_t) ((nr_sctr + SCE_SCTRPERFRAG - 1) / SCE_SCTRPERFRAG);
-
-		lun->nr_fragmap = (nr_frag + MAXFRAGS4FMAP - 1) / MAXFRAGS4FMAP;
+				(uint32_t) ((nr_sctr + SCE_SCTRPERFRAG - 1) / SCE_SCTRPERFRAG);
 
 		/* allocate memory for fragmap */
-		lun->fragmaps =
-		    kmalloc(lun->nr_fragmap * sizeof(fragdesc_t *), (GFP_KERNEL & ~__GFP_WAIT));
-		if (lun->fragmaps) {
-			memset(lun->fragmaps, 0,
-				 sizeof(fragdesc_t *) * lun->nr_fragmap);
-
-			for (i = 0; i < lun->nr_fragmap; i++) {
-				n = (nr_frag >
-				     MAXFRAGS4FMAP) ? MAXFRAGS4FMAP : nr_frag;
-				lun->fragmaps[i] =
-				    (fragdesc_t *) kmalloc(n * sizeof(fragdesc_t), (GFP_KERNEL & ~__GFP_WAIT));
-
-				if (NULL == lun->fragmaps[i])
-					break;
-				memset(lun->fragmaps[i], 0,
-					 n * sizeof(fragdesc_t));
-				nr_frag -= n;
-			}
+		lun->fragmap = vmalloc(lun->nr_frag * sizeof(fragdesc_t));
+		if (!lun->fragmap)
+		{
+			err = ENOMEM;
+			goto out;
 		}
-		if (nr_frag > 0) {	/* Error clearing */
-			_lun_destroy(lun);
-		} else {
-			ret = SCE_SUCCESS;
-		}
+		/* Initializing to 01010101's */
+		memset(lun->fragmap, 85, sizeof(fragdesc_t) * lun->nr_frag);
 	}
-	return ret;
+
+out:
+	return err;
 }
 
 /*
@@ -201,7 +178,7 @@ int _lun_isvalididx(sce_t * sce, uint16_t lunidx)
 	if ((sce) && (lunidx < SCE_MAXLUN)) {
 		lun = &sce->luntbl[lunidx];
 
-		if ((lun->fragmaps) && (!lun->waiting4deletion)) {
+		if ((lun->fragmap) && (!lun->waiting4deletion)) {
 			ret = SCE_SUCCESS;
 		}
 	}
@@ -210,7 +187,6 @@ int _lun_isvalididx(sce_t * sce, uint16_t lunidx)
 
 /*
     when cache device is removed... 
-
  */
 int _lun_rmcdev(lun_t * lun, uint32_t devnum)
 {
@@ -220,11 +196,9 @@ int _lun_rmcdev(lun_t * lun, uint32_t devnum)
 	uint32_t nr_miss;
 	int ret = SCE_ERROR;
 
-	if ((lun) && (lun->fragmaps) && (devnum < SCE_MAXCDEV)) {
+	if ((lun) && (lun->fragmap) && (devnum < SCE_MAXCDEV)) {
 		for (fragnum = 0; fragnum < lun->nr_frag; fragnum++) {
-			fdesc =
-			    lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-								   MAXFRAGS4FMAP];
+			fdesc = lun->fragmap[fragnum];
 
 			if ((fdesc & FRAGDESC_MAPPED) == 0)
 				continue;
@@ -236,9 +210,7 @@ int _lun_rmcdev(lun_t * lun, uint32_t devnum)
 				continue;
 
 			nr_miss = frag->nr_miss;
-			lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							       MAXFRAGS4FMAP] =
-			    (nr_miss & FRAGDESC_DATAMASK);
+			lun->fragmap[fragnum] = (nr_miss & FRAGDESC_DATAMASK);
 
 		}
 		ret = SCE_SUCCESS;

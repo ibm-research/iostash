@@ -153,7 +153,7 @@ int sce_rmcdev(sce_cdevhndl_t devhndl)
 	for (i = 0, lun = sce->luntbl; i < SCE_MAXLUN; i++, lun++) {
 
 		spin_lock_irqsave(&lun->lock, lflags);
-		if (lun->fragmaps) {
+		if (lun->fragmap) {
 			_lun_rmcdev(lun, devnum);
 		}
 		spin_unlock_irqrestore(&lun->lock, lflags);
@@ -183,7 +183,7 @@ sce_lunhndl_t sce_addlun(sce_hndl_t scehndl, sector_t nr_sctr, void *lunctx)
 	spin_lock_irqsave(&sce->lock, flags);
 
 	for (lun = sce->luntbl, i = 0; i < SCE_MAXLUN; lun++, i++) {
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 	}
 
@@ -218,7 +218,7 @@ int sce_rmlun(sce_lunhndl_t lunhndl)
 	spin_lock_irqsave(&lun->lock, lflags);
 
 	ret = SCE_ERROR;
-	if (lun->fragmaps) {
+	if (lun->fragmap) {
 		if (lun->nr_service > 0) {
 			lun->waiting4deletion = true;
 			ret = SCE_SUCCESS;
@@ -252,7 +252,7 @@ static lun_t* _lock_lun(sce_lunhndl_t lunhndl, sector_t sctrnum,
 
 	spin_lock_irqsave(&lun->lock, *flags);
 
-	if ((!lun->fragmaps) || (!nr_sctr) ||
+	if ((!lun->fragmap) || (!nr_sctr) ||
 	    ((sctrnum + nr_sctr) > lun->nr_sctr))
 		goto unlock_and_out;
 
@@ -300,13 +300,14 @@ int sce_get4read(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 	if ((pgoff + pgcnt) > SCE_PAGEPERFRAG)
 		goto unlock_and_out;
 
-	fdesc = lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP];
+	fdesc = lun->fragmap[fragnum];
 	if (!(fdesc & FRAGDESC_MAPPED))
 	{
-		lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP]
-			= FRAGDESC_INC(fdesc);
+		lun->fragmap[fragnum] = FRAGDESC_INC(fdesc);
 		fdesc = 0;
-	} else {
+	}
+	else
+	{
 		frag = _pfid2frag(sce, fdesc, out_fmap);
 		if ((fdesc & FRAGDESC_VALID) &&
 	            (SCE_SUCCESS == _frag_isvalid(frag, pgoff, pgcnt))) {
@@ -354,7 +355,7 @@ int sce_put4read(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 	if (((sctrnum + nr_sctr - 1) / SCE_SCTRPERFRAG) != fragnum)
 		goto unlock_and_out;
 
-	fdesc = lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP];
+	fdesc = lun->fragmap[fragnum];
 
 	if (((fdesc & FRAGDESC_MAPPED) == 0) ||
 	    ((fdesc & FRAGDESC_VALID ) == 0))
@@ -411,7 +412,7 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 
 	spin_lock_irqsave(&lun->lock, flags);
 
-	if ((!lun->fragmaps) || (!nr_sctr) ||
+	if ((!lun->fragmap) || (!nr_sctr) ||
 	    ((sctrnum + nr_sctr) > lun->nr_sctr))
 		goto unlock_and_out;
 
@@ -436,8 +437,7 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 			pgcnt = count;
 
 		/* get fragment descriptor */
-		fdesc = lun->fragmaps[fragnum / MAXFRAGS4FMAP]
-			             [fragnum % MAXFRAGS4FMAP];
+		fdesc = lun->fragmap[fragnum];
 		if (fdesc & FRAGDESC_MAPPED) {
 			frag = _pfid2frag(sce, fdesc, NULL);
 			if (!frag)
@@ -585,13 +585,12 @@ int sce_get4write(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 
 	BUG_ON((pgoff + pgcnt) > SCE_PAGEPERFRAG);
 
-	fdesc = lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP];
+	fdesc = lun->fragmap[fragnum];
 	if (!(fdesc & FRAGDESC_MAPPED))
 	{
 		/* if the fragment is not mapped:
 		   just increase cache miss count by 1 */
-		lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP]
-			= FRAGDESC_INC(fdesc);
+		lun->fragmap[fragnum] = FRAGDESC_INC(fdesc);
 		goto unlock_and_out;
 	}
 
@@ -660,7 +659,7 @@ int sce_put4write(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 	if (((sctrnum + nr_sctr - 1) / SCE_SCTRPERFRAG) != fragnum)
 		goto unlock_and_out;
 
-	fdesc = lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum % MAXFRAGS4FMAP];
+	fdesc = lun->fragmaps[fragnum];
 
 	if (((fdesc & FRAGDESC_MAPPED) == 0) ||
 	    ((fdesc & FRAGDESC_VALID ) == 0))

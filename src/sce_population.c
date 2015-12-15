@@ -40,7 +40,7 @@ int _alloc4population(lun_t * lun, uint32_t fragnum, pfid_t * out_pfid)
 			break;
 		if (!lun)
 			break;
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 		if (fragnum >= lun->nr_frag)
 			break;
@@ -96,7 +96,7 @@ int _complete_population(lun_t * lun, uint32_t fragnum)
 	do {
 		if (!lun)
 			break;
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 		if (fragnum >= lun->nr_frag)
 			break;
@@ -105,9 +105,7 @@ int _complete_population(lun_t * lun, uint32_t fragnum)
 		if (!sce)
 			break;
 
-		fdesc =
-		    lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							   MAXFRAGS4FMAP];
+		fdesc = lun->fragmap[fragnum];
 		if ((fdesc & FRAGDESC_MAPPED) == 0)
 			break;
 
@@ -125,9 +123,7 @@ int _complete_population(lun_t * lun, uint32_t fragnum)
 
 			if (frag->nr_service != 1)
 				break;	/* error! */
-			lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							       MAXFRAGS4FMAP] |=
-			    FRAGDESC_VALID;
+			lun->fragmap[fragnum] |= FRAGDESC_VALID;
 			frag->nr_service = 0;
 		}
 
@@ -154,7 +150,7 @@ int _cancel_population(lun_t * lun, uint32_t fragnum)
 	do {
 		if (!lun)
 			break;
-		if (!lun->fragmaps)
+		if (!lun->fragmap)
 			break;
 		if (fragnum >= lun->nr_frag)
 			break;
@@ -163,9 +159,7 @@ int _cancel_population(lun_t * lun, uint32_t fragnum)
 		if (!sce)
 			break;
 
-		fdesc =
-		    lun->fragmaps[fragnum / MAXFRAGS4FMAP][fragnum %
-							   MAXFRAGS4FMAP];
+		fdesc = lun->fragmap[fragnum];
 		if ((fdesc & FRAGDESC_MAPPED) == 0)
 			break;
 
@@ -235,10 +229,7 @@ _choose4population(sce_t * sce, uint16_t * out_lunidx, uint32_t * out_fragnum)
 
 			if ((SCE_SUCCESS == _lun_isvalididx(sce, *out_lunidx))
 			    && (sce->luntbl[*out_lunidx].
-				fragmaps[*out_fragnum /
-					 MAXFRAGS4FMAP][*out_fragnum %
-							MAXFRAGS4FMAP] &
-				FRAGDESC_MAPPED) == 0)
+				fragmap[*out_fragnum] &	FRAGDESC_MAPPED) == 0)
 				break;
 		}
 	} while (0);
@@ -278,11 +269,7 @@ _choose4population(sce_t * sce, uint16_t * out_lunidx, uint32_t * out_fragnum)
 			if (SCE_SUCCESS != _lun_isvalididx(sce, lunidx))
 				continue;
 
-			fdesc =
-			    sce->luntbl[lunidx].fragmaps[fragnum /
-							 MAXFRAGS4FMAP][fragnum
-									%
-									MAXFRAGS4FMAP];
+			fdesc = sce->luntbl[lunidx].fragmap[fragnum];
 			if ((fdesc & FRAGDESC_MAPPED) != 0)
 				continue;
 

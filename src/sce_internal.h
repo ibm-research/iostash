@@ -127,8 +127,7 @@ typedef struct lun {
 	sce_hndl_t scehndl;
 
 	/* fragment map */
-	uint32_t nr_fragmap;
-	fragdesc_t **fragmaps;
+	fragdesc_t *fragmap;
 
 	/* lun context */
 	void *lunctx;
