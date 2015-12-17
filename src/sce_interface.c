@@ -25,6 +25,7 @@
 
 #include "sce.h"
 #include "sce_internal.h"
+#include "helpers.h"
 
 /* ---------------------------------------------------------------------------------------- */
 /*               APIs for initialization / termination / configuration                      */
@@ -289,7 +290,10 @@ int sce_get4read(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 	lun = _lock_lun(lunhndl, sctrnum, nr_sctr, &flags, true);
 	if (!lun)
 		return ret;
+
 	sce = (sce_t *) lun->scehndl;
+	atomic64_inc(&lun->stats.reads);
+	atomic64_add(nr_sctr, &lun->stats.read_sctrs);
 
 	firstpg =  sctrnum                / SCE_SCTRPERPAGE;
 	lastpg  = (sctrnum + nr_sctr - 1) / SCE_SCTRPERPAGE;
@@ -301,13 +305,10 @@ int sce_get4read(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 		goto unlock_and_out;
 
 	fdesc = lun->fragmap[fragnum];
-	if (!(fdesc & FRAGDESC_MAPPED))
-	{
+	if (!(fdesc & FRAGDESC_MAPPED)) {
 		lun->fragmap[fragnum] = FRAGDESC_INC(fdesc);
 		fdesc = 0;
-	}
-	else
-	{
+	} else {
 		frag = _pfid2frag(sce, fdesc, out_fmap);
 		if ((fdesc & FRAGDESC_VALID) &&
 	            (SCE_SUCCESS == _frag_isvalid(frag, pgoff, pgcnt))) {
@@ -327,7 +328,10 @@ int sce_get4read(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr,
 	if (fdesc == 0) {
 		sce->nr_miss++;
 		_misslog_put(sce, GET_LUNIDX(sce, lun), fragnum);
+	} else {
+		atomic64_inc(&lun->stats.read_hits);
 	}
+
 unlock_and_out:
 	spin_unlock_irqrestore(&lun->lock, flags);
 
@@ -396,8 +400,8 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 	fragdesc_t fdesc;
 	uint32_t pgcnt;
 	uint32_t pgoff;
+	int wh;
 	int ret;
-
 
 	ret = SCE_ERROR;
 
@@ -406,7 +410,6 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 
 	lun = (lun_t *)lunhndl;
 	sce = (sce_t *)lun->scehndl;
-
 	if (!sce)
 		goto out;
 
@@ -418,6 +421,10 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 
 	if (_lun_is_serviceable(lun) != SCE_SUCCESS)
 		goto unlock_and_out;
+
+	wh = 0;
+	atomic64_inc(&lun->stats.writes);
+	atomic64_add(nr_sctr, &lun->stats.write_sctrs);
 
 	/* sector number to page number */
 	start = sctrnum / SCE_SCTRPERPAGE;
@@ -439,11 +446,14 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 		/* get fragment descriptor */
 		fdesc = lun->fragmap[fragnum];
 		if (fdesc & FRAGDESC_MAPPED) {
+			uint32_t n = 0;
 			frag = _pfid2frag(sce, fdesc, NULL);
 			if (!frag)
 				break;
 
-			_frag_invalidate(frag, pgoff, pgcnt);
+			wh++;
+			n = _frag_invalidate(frag, pgoff, pgcnt);
+			atomic64_sub(n * SCE_SCTRPERPAGE, &lun->stats.valid_sctrs);
 
 			if (fdesc & FRAGDESC_VALID) {
 				_lun_gc(lun, frag);
@@ -454,8 +464,11 @@ int sce_invalidate(sce_lunhndl_t lunhndl, sector_t sctrnum, uint32_t nr_sctr)
 		pgoff  = 0;
 		count -= pgcnt;
 	}
-	if (count == 0)
-		ret = SCE_SUCCESS;
+
+	ASSERT(0 == count);
+	ret = SCE_SUCCESS;
+	if (0 != wh)
+		atomic64_inc(&lun->stats.write_hits);
 
 unlock_and_out:
 	spin_unlock_irqrestore(&lun->lock, flags);
@@ -546,6 +559,9 @@ int sce_put4pop(sce_hndl_t scehndl, sce_poptask_t *poptask, int failed)
 	spin_lock_irqsave(&lun->lock, flags);
 	if (!failed) {
 		ret = _complete_population(lun, poptask->lun_fragnum);
+		atomic64_inc(&lun->stats.populations);
+		atomic64_inc(&lun->stats.alloc_sctrs);
+		atomic64_add(SCE_SCTRPERFRAG, &lun->stats.valid_sctrs);
 	} else {
 		ret = _cancel_population(lun, poptask->lun_fragnum);
 	}

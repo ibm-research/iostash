@@ -25,6 +25,7 @@
 
 #include "iostash.h"
 #include "helpers.h"
+#include "sce_internal.h"
 
 #include <linux/hash.h>
 #include <linux/fs.h>
@@ -141,8 +142,8 @@ static void _destroy_ssd(struct ssd_info *const ssd)
 struct ssd_attribute
 {
         struct attribute attr;
-        ssize_t (*show) (struct ssd_info *ssd, char *buffer );
-        ssize_t (*store) (struct ssd_info *ssd, const char *buffer, size_t size );
+        ssize_t (*show) (struct ssd_info *ssd, char *buffer);
+        ssize_t (*store) (struct ssd_info *ssd, const char *buffer, size_t size);
 };
 
 static ssize_t name_show(struct ssd_info *ssd, char *buffer)

@@ -56,7 +56,7 @@
 #define attr_name(_attr) (_attr).attr.name
 #endif
 
-/* SYSFS macros nd here */
+/* SYSFS macros end here */
 
 
 const char * _basename(const char *path);
@@ -83,5 +83,13 @@ const char * _basename(const char *path);
 		printk(KERN_ALERT "%s:%d: "format" \n", \
 			__FUNCTION__, __LINE__, ##arg); \
 	} while (0)
+
+#define ASSERT(COND)                                                    \
+        do {                                                            \
+                if (unlikely(!(COND))) {                                \
+                        printk(KERN_ALERT "%s:%d: Assertion '" #COND "' failed \n", __FILE__, __LINE__); \
+                        dump_stack();                                   \
+                }                                                       \
+        } while (0)
 
 #endif /* __HELPERS_H__ */

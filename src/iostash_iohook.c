@@ -326,7 +326,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 			((psn + nr_sctr) > hdd->part_end))
 			break;
 
-		if (bio_data_dir(bio) != READ) {
+		if (bio_data_dir(bio) == WRITE) {
 			gctx.st_write++;
 
 #ifdef SCE_AWT
@@ -353,7 +353,7 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 						break;
 					}
 					_io_queue(io);
-					/* lose the reference to hdd , not needed anymore */
+					/* lose the reference to hdd, not needed anymore */
 					atomic_dec(&hdd->nr_ref);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 					return 0;
@@ -368,48 +368,49 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 #endif
 			break;
 		}
+		else
+		{
+			/* Read handling */
+			gctx.st_read++;
 
+			/* make sure the request is only for one fragment */
+			if (((psn + nr_sctr - 1) / SCE_SCTRPERFRAG) !=
+				(psn / SCE_SCTRPERFRAG))
+				break;
 
-		/* Read handling */
-		gctx.st_read++;
-
-		/* make sure the request is only for one fragment */
-		if (((psn + nr_sctr - 1) / SCE_SCTRPERFRAG) !=
-			(psn / SCE_SCTRPERFRAG))
-			break;
-
-		/* cache hit/miss check */
-		rcu_read_lock();
-		if (sce_get4read(hdd->lun, psn, nr_sctr, &fmap) != SCE_SUCCESS) {
+			/* cache hit/miss check */
+			rcu_read_lock();
+			if (sce_get4read(hdd->lun, psn, nr_sctr, &fmap) != SCE_SUCCESS) {
+				rcu_read_unlock();
+				break;
+			}
+			ssd = (struct ssd_info *) fmap.cdevctx;
+			atomic_inc(&ssd->nr_ref);
 			rcu_read_unlock();
-			break;
-		}
-		ssd = (struct ssd_info *)fmap.cdevctx;
-		atomic_inc(&ssd->nr_ref);
-		rcu_read_unlock();
-		/* make sure the request is within the SSD limits and the SSD is online */
-		if (!ssd->online || ssd->queue_max_hw_sectors < nr_sctr) {
-			sce_put4read(hdd->lun, psn, nr_sctr);
-			atomic_dec(&ssd->nr_ref);
-			break;
-		}
+			/* make sure the request is within the SSD limits and the SSD is online */
+			if (!ssd->online || ssd->queue_max_hw_sectors < nr_sctr) {
+				sce_put4read(hdd->lun, psn, nr_sctr);
+				atomic_dec(&ssd->nr_ref);
+				break;
+			}
 
-		/* cache hit */
-		io = _io_alloc(hdd, ssd, fmap.fragnum, bio, psn);
-		if (NULL == io) {
-			atomic_dec(&ssd->nr_ref);
-			break;
+			/* cache hit */
+			io = _io_alloc(hdd, ssd, fmap.fragnum, bio, psn);
+			if (NULL == io) {
+				atomic_dec(&ssd->nr_ref);
+				break;
+			}
+
+			_io_queue(io);
+
+			/* lose the reference to hdd , not needed anymore */
+			atomic_dec(&hdd->nr_ref);
 		}
-
-		_io_queue(io);
-
-		/* lose the reference to hdd , not needed anymore */
-		atomic_dec(&hdd->nr_ref);
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
-		return 0;
+			return 0;
 #else
-		return;
+			return;
 #endif
 	} while (0);
 

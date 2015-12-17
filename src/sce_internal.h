@@ -106,6 +106,37 @@ typedef struct frag {
 
 } frag_t;
 
+
+struct lun_stats {
+	/* Cache fragments allocated to the volume */
+	atomic64_t alloc_sctrs;
+
+	/* Valid cached sectors from this volume */
+	atomic64_t valid_sctrs;
+
+	/* Total data populated from this volume to the cache */
+	atomic64_t populations;
+
+	/* Total read I/Os to the volume */
+	atomic64_t reads;
+
+	/* Total number of sectors read from the volume */
+	atomic64_t read_sctrs;
+
+	/* Number of read cache hits for this volume */
+	atomic64_t read_hits;
+
+	/* Total write I/Os to the volume */
+	atomic64_t writes;
+
+	/* Total number of sectors written to the volume */
+	atomic64_t write_sctrs;
+
+	/* Total number of I/Os that invalidated
+	 * (or wrote-through) data in the cache */
+	atomic64_t write_hits;
+};
+
 /* cache device */
 typedef struct cdev {
 	/* parent pointer */
@@ -116,6 +147,7 @@ typedef struct cdev {
 
 	uint32_t nr_frag;
 	frag_t *fragtbl;
+
 } cdev_t;
 
 #define GET_LUNIDX(sce, lun)                    (uint16_t)((lun) - (sce->luntbl))
@@ -144,6 +176,9 @@ typedef struct lun {
 
 	/* deletion flag */
 	bool  waiting4deletion;
+
+	/* LUN-specific cache statistics */
+	struct lun_stats stats;
 } lun_t;
 
 /* SCE */

@@ -62,7 +62,7 @@ int _alloc4population(lun_t * lun, uint32_t fragnum, pfid_t * out_pfid)
 
 			sce->nr_eviction++;
 
-			/* repeat until fragment allocation successes */
+			/* repeat until fragment allocation succeeds */
 		} while (1);
 
 		if (ret == SCE_SUCCESS) {

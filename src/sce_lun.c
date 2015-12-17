@@ -24,6 +24,7 @@
 
 #include "sce.h"
 #include "sce_internal.h"
+#include "helpers.h"
 
 /* ---------------------------------------------------------------------------------------- */
 /*                                  LUN related                                             */
@@ -76,27 +77,40 @@ int _lun_init(sce_t * sce, lun_t * lun, sector_t nr_sctr)
 	uint32_t nr_frag;
 	int err = 0;
 
-	if ((sce) && (lun) && (lun->fragmap == NULL) && (nr_sctr > 0)) {
-		/* set sce handle */
-		lun->scehndl = (sce_hndl_t) sce;
+	ASSERT(sce);
+	ASSERT(lun);
+	ASSERT(!lun->fragmap);
+	ASSERT(nr_sctr > 0);
 
-		spin_lock_init(&lun->lock);
+	/* set sce handle */
+	lun->scehndl = (sce_hndl_t) sce;
 
-		/* set LUN size */
-		lun->nr_sctr = nr_sctr;
-		lun->nr_frag = nr_frag =
-				(uint32_t) ((nr_sctr + SCE_SCTRPERFRAG - 1) / SCE_SCTRPERFRAG);
+	spin_lock_init(&lun->lock);
 
-		/* allocate memory for fragmap */
-		lun->fragmap = vmalloc(lun->nr_frag * sizeof(fragdesc_t));
-		if (!lun->fragmap)
-		{
-			err = ENOMEM;
-			goto out;
-		}
-		/* Initializing to 01010101's */
-		memset(lun->fragmap, 85, sizeof(fragdesc_t) * lun->nr_frag);
+	/* set LUN size */
+	lun->nr_sctr = nr_sctr;
+	lun->nr_frag = nr_frag =
+			(uint32_t) ((nr_sctr + SCE_SCTRPERFRAG - 1) / SCE_SCTRPERFRAG);
+
+	/* allocate memory for fragmap */
+	lun->fragmap = vmalloc(lun->nr_frag * sizeof(fragdesc_t));
+	if (!lun->fragmap)
+	{
+		err = ENOMEM;
+		goto out;
 	}
+	/* Initializing to 01010101's */
+	memset(lun->fragmap, 85, sizeof(fragdesc_t) * lun->nr_frag);
+
+	atomic64_set(&lun->stats.alloc_sctrs, 0);
+	atomic64_set(&lun->stats.valid_sctrs, 0);
+	atomic64_set(&lun->stats.populations, 0);
+	atomic64_set(&lun->stats.reads, 0);
+	atomic64_set(&lun->stats.read_sctrs, 0);
+	atomic64_set(&lun->stats.read_hits, 0);
+	atomic64_set(&lun->stats.writes, 0);
+	atomic64_set(&lun->stats.write_sctrs, 0);
+	atomic64_set(&lun->stats.write_hits, 0);
 
 out:
 	return err;
@@ -114,8 +128,7 @@ int _lun_is_serviceable(lun_t * lun)
 
 /*
     _lun_purge(lun_t* lun)
-        : remove and destroy lun structure
-
+        : remove and destroy LUN structure
  */
 int _lun_purge(lun_t * lun)
 {
@@ -168,7 +181,7 @@ int _lun_gc(lun_t * lun, frag_t * frag)
 }
 
 /*
-    check wheather the given lun index is valid or not
+    check whether the given LUN index is valid or not
  */
 int _lun_isvalididx(sce_t * sce, uint16_t lunidx)
 {
@@ -211,6 +224,10 @@ int _lun_rmcdev(lun_t * lun, uint32_t devnum)
 
 			nr_miss = frag->nr_miss;
 			lun->fragmap[fragnum] = (nr_miss & FRAGDESC_DATAMASK);
+
+			atomic64_dec(&lun->stats.alloc_sctrs);
+			atomic64_sub(frag->nr_valid * SCE_SCTRPERPAGE,
+					&lun->stats.valid_sctrs);
 
 		}
 		ret = SCE_SUCCESS;

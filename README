@@ -66,26 +66,29 @@ A user-interface script will also be installed under /usr/bin/iostash.
 Usage
 ======================================
 
-1. Add a device target to start caching from (say /dev/sda):
-sudo iostash target add /dev/sda
+1. Add a target device to start caching from (say /dev/sda):
+$ sudo iostash target add /dev/sda
 
 2. Add a new device to the cache (say /dev/nvme0n1):
-sudo iostash cache add /dev/nvme0n1
+$ sudo iostash cache add /dev/nvme0n1
 
-3. List all device targets that we are caching from:
-sudo iostash target list
+3. List all target devices that we are caching from:
+$ sudo iostash target list
 
-4. List all devices that we are caching to:
-sudo iostash cache list
+4. List all devices that we are caching on:
+$ sudo iostash cache list
 
-5. Stop caching from a device target (say /dev/sda):
-sudo iostash target remove /dev/sda
+5. Stop caching from a target device (say /dev/sda):
+$ sudo iostash target remove /dev/sda
 
 6. Remove a device from the pool of cache devices (say /dev/nvme0n1):
-sudo iostash cache remove /dev/nvme0n1
+$ sudo iostash cache remove /dev/nvme0n1
 
-7. View global statistics (cache hits, etc):
-sudo iostash global stats
+7. View statistics per target device
+$ sudo iostash target stat /dev/sda
+
+8. View global statistics:
+$ sudo iostash global stats
 
 
 References

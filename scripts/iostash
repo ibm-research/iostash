@@ -33,6 +33,7 @@ usage () {
     echo "    Actions:"
     echo "    add     <object=device>      Start caching from a target device"
     echo "    remove  <object=device>      Stop caching from a target device"
+    echo "    stat    <object=device>      Print statistics for a target device"
     echo "    list    <>                   List all target devices"
     echo ""
     echo "global"
@@ -58,13 +59,99 @@ check_ret()
 
 check_dev()
 {
+	if [ -z "$1" ];
+    then
+	echo "Device not specified."
+	exit 1
+    fi
     if [ ! -b "$1" ];
     then
-	echo "$1 is not a block device"
+	echo "$1 is not a block device."
 	exit 1
     fi
 }
 
+get_sys_path()
+{
+	check_dev $1
+	d=
+	for t in $(ls "$SYSFS_TARGETS_DIR");
+	do
+		if [ "$1" = "$(cat $SYSFS_TARGETS_DIR/$t/name)" ];
+		then
+			d="$SYSFS_TARGETS_DIR/$t"
+		fi
+	done
+		
+	if [ -z "$d" ];
+	then
+		return
+	else
+		echo "$d"
+	fi
+}
+
+print_stats () 
+{
+	msg="Statistics for $(cat $1/name)"
+	echo $msg
+ 	for i in $(seq 1 ${#msg});
+ 	do
+ 		echo -n "-"
+ 	done
+ 	echo
+
+ 	ALLOCATED_SECTORS=$(grep "Allocated" $1/stats | cut -d":" -f2) 	 
+	VALID_SECTORS=$(grep "Valid" $1/stats | cut -d":" -f2)
+	POPULATIONS=$(grep "Populations" $1/stats | cut -d":" -f2)	
+	READS=$(grep "Read I/Os" $1/stats | cut -d":" -f2)
+	READ_SECTORS=$(grep "Read sectors" $1/stats | cut -d":" -f2)
+	READ_HITS=$(grep "Read Cache Hits" $1/stats | cut -d":" -f2)
+	WRITES=$(grep "Write I/Os" $1/stats | cut -d":" -f2)
+	WRITE_SECTORS=$(grep "Write sectors" $1/stats | cut -d":" -f2)
+	WRITE_HITS=$(grep "Write Invalidates" $1/stats | cut -d":" -f2)
+
+	if [ -z "$ALLOCATED_SECTORS" ];	then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$VALID_SECTORS" ]; 	then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$POPULATIONS" ]; 		then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$READS" ]; 			then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$READ_SECTORS" ]; 		then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$READ_HITS" ]; 		then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$WRITES" ]; 			then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$WRITE_SECTORS" ]; 	then echo "Bad statistics file"; exit 1; fi
+	if [ -z "$WRITE_HITS" ]; 		then echo "Bad statistics file"; exit 1; fi
+
+	echo "S00  Cache Allocation MB : " "$(echo "$ALLOCATED_SECTORS / 2048" | bc)"
+	
+	if [ 0 -eq "$ALLOCATED_SECTORS" ];
+	then
+	echo "S01  Valid Data          : " "$(echo 0 | bc)"
+	else
+	echo "S01  Valid Data          : " "$(echo "scale=2; (100 * $VALID_SECTORS) / $ALLOCATED_SECTORS" | bc -l)%"
+	fi
+	
+	echo "S02  Read I/Os           : " "$(echo $READS | bc)"
+	
+	echo "S03  Read MB             : " "$(echo $READ_SECTORS / 2048 | bc)"
+	
+	if [ 0 -eq "$READS" ];
+	then
+	echo "S04  Read Cache Hit Rate : " "$(echo 0 | bc)"
+	else
+	echo "S04  Read Cache Hit Rate : " "$(echo "scale=2; (100 * $READ_HITS) / $READS" | bc -l)%"
+	fi
+	
+	echo "S05  Write I/Os          : " "$(echo $WRITES | bc)"
+	
+	echo "S06  Write MB            : " "$(echo $WRITE_SECTORS / 2048 | bc)"
+	
+	if [ 0 -eq "$WRITES" ];
+	then
+	echo "S07  Write Invalidations : " "$(echo 0 | bc)"
+	else
+	echo "S07  Write Invalidations : " "$(echo "scale=2; (100 * $WRITE_HITS) / $WRITES" | bc -l)%"
+	fi
+}
 
 ## Require superuser privileges
 if [[ $(/usr/bin/id -u) -ne 0 ]]; then
@@ -95,63 +182,80 @@ DEVNAME="$3"
 case "$COMPONENT" in
     cache):
 	case "$ACTION" in
-	    add):
+		add):
 		check_dev "$DEVNAME"
 		echo "Adding $DEVNAME to the cache."
 		echo "add $DEVNAME" > $CACHE_CTL_FILE
 		;;
 
-	    remove):
+		remove):
 		check_dev "$DEVNAME"
 		echo "Removing $DEVNAME from the cache."
 		echo "rm $DEVNAME" > $CACHE_CTL_FILE
 		;;
 
-	    list):
-	    	echo "Listing cache devices."
+		list):
+		echo "Listing cache devices."
 		DEVS=$(ls "$SYSFS_CACHES_DIR")
 		for d in $DEVS;
 		do
-		    cat "$SYSFS_CACHES_DIR/$d/name"
+			cat "$SYSFS_CACHES_DIR/$d/name"
 		done
 		;;
-	    *):
+		*):
 		;;
-	    esac
+		esac
 	;;
 
     target):
 	case "$ACTION" in
-	    add):
+		add):
 		check_dev "$DEVNAME"
 		echo "Starting caching from $DEVNAME."
 		echo "add $DEVNAME" > $TARGET_CTL_FILE
 		;;
 
-	    remove):
-	    	check_dev "$DEVNAME"
+		remove):
+		check_dev "$DEVNAME"
 		echo "rm $DEVNAME" > $TARGET_CTL_FILE
-	    	echo "Stopping caching from $DEVNAME."
-	    	;;
+		echo "Stopping caching from $DEVNAME."
+		;;
 
-	    list):
-	    	echo "Listing cached target devices."
+		stat):
+		check_dev "$DEVNAME"
+		p=$(get_sys_path "$DEVNAME")
+		if [ -z "$p" ];
+		then
+			echo "$DEVNAME is not a target device."
+			exit 1
+		fi
+		print_stats $p
+		;;
+
+		list):
+		echo "Listing target devices."
 		DEVS=$(ls "$SYSFS_TARGETS_DIR")
 		for d in $DEVS;
 		do
-		    cat "$SYSFS_TARGETS_DIR/$d/name"
+			cat "$SYSFS_TARGETS_DIR/$d/name"
 		done
-	    	;;
+		;;
 
-	    *):
-	    	;;
+		*):
+		;;
 	esac
 	;;
 
     global):
 	case "$ACTION" in
 	    stats):
-		cat "$SYSFS_CTL_DIR/gstats"
+	    echo "Statistics per target device:"
+	    echo
+	    for d in $(ls $SYSFS_TARGETS_DIR);
+	    do
+			print_stats "$SYSFS_TARGETS_DIR/$d"
+			echo	    
+	    done
 		;;
 	    *)
 		;;

@@ -24,6 +24,7 @@
 
 #include "iostash.h"
 #include "helpers.h"
+#include "sce_internal.h"
 
 #include <linux/hash.h>
 #include <linux/fs.h>
@@ -175,10 +176,43 @@ static ssize_t name_show(struct hdd_info *hdd, char *buffer)
 	return len;
 }
 
+static ssize_t stats_show(struct hdd_info *hdd, char *buffer)
+{
+	int len = 0;
+	struct lun_stats *st = &((lun_t *) hdd->lun)->stats;
+	sprintf(buffer,
+			"Allocated sectors : %lu\n"
+			"Valid sectors     : %lu\n"
+			"Populations       : %lu\n"
+			"Read I/Os         : %lu\n"
+			"Read sectors      : %lu\n"
+			"Read Cache Hits   : %lu\n"
+			"Write I/Os        : %lu\n"
+			"Write sectors     : %lu\n"
+			"Write Invalidates : %lu\n",
+			atomic64_read(&st->alloc_sctrs) * SCE_SCTRPERFRAG,
+			atomic64_read(&st->valid_sctrs),
+			atomic64_read(&st->populations),
+			atomic64_read(&st->reads),
+			atomic64_read(&st->read_sctrs),
+			atomic64_read(&st->read_hits),
+			atomic64_read(&st->writes),
+			atomic64_read(&st->write_sctrs),
+			atomic64_read(&st->write_hits)
+			);
+	len = strlen(buffer);
+	BUG_ON(len > PAGE_SIZE);
+	return len;
+}
+
+
 static struct hdd_attribute hdd_attr_name = __ATTR_RO(name);
+
+static struct hdd_attribute hdd_attr_stats = __ATTR_RO(stats);
 
 static struct attribute * hdd_attrs[] = {
 	&hdd_attr_name.attr,
+	&hdd_attr_stats.attr,
         NULL,
 };
 
