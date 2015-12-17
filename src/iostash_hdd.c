@@ -283,8 +283,8 @@ int hdd_register(char *path)
 		}
 
 		rmb();
-		if (hdd->bdev->bd_holder) {
-			ERR("iostash: HDD owned exclusively \n");
+		if (hdd->bdev->bd_holder == (void *) &gctx.ssdtbl) {
+			ERR("iostash: HDD %s is already being used as a cache device.\n", path);
 			break;
 		}
 
