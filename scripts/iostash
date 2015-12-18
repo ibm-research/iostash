@@ -41,11 +41,24 @@ usage () {
     echo "    Actions:"
     echo "    stats   <>                   Print out global statistics."
     echo ""
+    echo "version"
+    echo "  Print the iostash version and exit"
+    echo ""
     echo "help"
     echo "  Print these instructions and exit"
     echo "----------------------------------------------------------------------"
 }
 
+BRANCH_NAME="BRANCH_NAME_PH"
+COMMIT_HASH="COMMIT_HASH_PH"
+BUILD_DATE="BUILD_DATE_PH"
+MD5SUM="MD5SUM_PH"
+
+version () {
+    echo "Branch Name: $BRANCH_NAME"
+    echo "Commit     : $COMMIT_HASH"
+    echo "Build Date : $BUILD_DATE"
+}
 
 check_ret()
 {
@@ -82,7 +95,7 @@ get_sys_path()
 			d="$SYSFS_TARGETS_DIR/$t"
 		fi
 	done
-		
+
 	if [ -z "$d" ];
 	then
 		return
@@ -91,7 +104,7 @@ get_sys_path()
 	fi
 }
 
-print_stats () 
+print_stats ()
 {
 	msg="Statistics for $(cat $1/name)"
 	echo $msg
@@ -101,9 +114,9 @@ print_stats ()
  	done
  	echo
 
- 	ALLOCATED_SECTORS=$(grep "Allocated" $1/stats | cut -d":" -f2) 	 
+ 	ALLOCATED_SECTORS=$(grep "Allocated" $1/stats | cut -d":" -f2)
 	VALID_SECTORS=$(grep "Valid" $1/stats | cut -d":" -f2)
-	POPULATIONS=$(grep "Populations" $1/stats | cut -d":" -f2)	
+	POPULATIONS=$(grep "Populations" $1/stats | cut -d":" -f2)
 	READS=$(grep "Read I/Os" $1/stats | cut -d":" -f2)
 	READ_SECTORS=$(grep "Read sectors" $1/stats | cut -d":" -f2)
 	READ_HITS=$(grep "Read Cache Hits" $1/stats | cut -d":" -f2)
@@ -122,29 +135,29 @@ print_stats ()
 	if [ -z "$WRITE_HITS" ]; 		then echo "Bad statistics file"; exit 1; fi
 
 	echo "S00  Cache Allocation MB : " "$(echo "$ALLOCATED_SECTORS / 2048" | bc)"
-	
+
 	if [ 0 -eq "$ALLOCATED_SECTORS" ];
 	then
 	echo "S01  Valid Data          : " "$(echo 0 | bc)"
 	else
 	echo "S01  Valid Data          : " "$(echo "scale=2; (100 * $VALID_SECTORS) / $ALLOCATED_SECTORS" | bc -l)%"
 	fi
-	
+
 	echo "S02  Read I/Os           : " "$(echo $READS | bc)"
-	
+
 	echo "S03  Read MB             : " "$(echo $READ_SECTORS / 2048 | bc)"
-	
+
 	if [ 0 -eq "$READS" ];
 	then
 	echo "S04  Read Cache Hit Rate : " "$(echo 0 | bc)"
 	else
 	echo "S04  Read Cache Hit Rate : " "$(echo "scale=2; (100 * $READ_HITS) / $READS" | bc -l)%"
 	fi
-	
+
 	echo "S05  Write I/Os          : " "$(echo $WRITES | bc)"
-	
+
 	echo "S06  Write MB            : " "$(echo $WRITE_SECTORS / 2048 | bc)"
-	
+
 	if [ 0 -eq "$WRITES" ];
 	then
 	echo "S07  Write Invalidations : " "$(echo 0 | bc)"
@@ -160,7 +173,7 @@ if [[ $(/usr/bin/id -u) -ne 0 ]]; then
 fi
 
 
-if [ $# -le 1 ]
+if [ $# -lt 1 ]
 then
     usage
     exit
@@ -254,7 +267,7 @@ case "$COMPONENT" in
 	    for d in $(ls $SYSFS_TARGETS_DIR);
 	    do
 			print_stats "$SYSFS_TARGETS_DIR/$d"
-			echo	    
+			echo
 	    done
 		;;
 	    *)
@@ -262,6 +275,23 @@ case "$COMPONENT" in
 
 	esac
 	;;
+
+    version):
+	    version
+	    exit 0
+	    ;;
+
+    help):
+	 usage
+	 exit 0
+	 ;;
+
+    md5sum):
+	   # This one is hidden. It prints out the md5sum of iostash.ko
+	   # at the time of the build.
+	   echo $MD5SUM
+	   exit 0
+	   ;;
 
     *):
 	echo -e "Unknown component \"$COMPONENT\"."

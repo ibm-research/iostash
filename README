@@ -53,9 +53,27 @@ Make sure you have the kernel target and compilation tools. For Ubuntu
 sudo apt-get build-dep linux-image-`uname -r`
 
 Enter the iostash directory and run:
-make && make install
+$ ./build.sh
 
-The above instructions will build and install a kernel module for the
+This will generate a bundle in the package/ directory. To install,
+extract the content of the package in a directory and run the
+'install.sh' script:
+
+$ tar xvfz iostash-<kernel-version>.tar.gz
+$ cd iostash-<kernel-version>
+$ sudo ./install.sh
+
+In case iostash is already running, the new binary will only be used
+by the system the next time the module is loaded. To install and load
+the new binary, invoke the installation script with '--force':
+
+$ sudo ./install.sh --force
+
+NOTE: This will purge the content of the caches, but it should not be
+disruptive to on-going I/O. After the installation completes, the
+existing cache devices and target will be added anew.
+
+All the above instructions will build and install a kernel module for the
 currently loaded kernel on the build system. One can build for a
 specific kernel version by setting the KERNEL_DIR to the path for the
 desired kernel.
