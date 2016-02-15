@@ -285,9 +285,10 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 
 	rcu_read_lock();
 	hdd = hdd_search(bio);
-	if (hdd)
+	if (hdd) {
 		atomic_inc(&hdd->nr_ref);
-	org_mapreq = hdd->org_mapreq;
+		org_mapreq = hdd->org_mapreq;
+	}
 	rcu_read_unlock();
 
 	if (unlikely(NULL == hdd)) {
