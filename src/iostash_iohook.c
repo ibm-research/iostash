@@ -24,19 +24,24 @@
 
 #include "iostash.h"
 #include "helpers.h"
-
-static void _endio4read(struct bio *clone, int error);
-static void _endio4write(struct bio *clone, int error);
 static struct iostash_bio *_io_alloc(struct hdd_info * hdd, struct ssd_info * ssd, uint32_t fragnum,
 				    struct bio *bio, sector_t psn);
 static int _clone_init(struct iostash_bio *io, struct bio *clone, int is4ssd,
 		       void *endiofn);
 static void _inc_pending(struct iostash_bio *io);
 static void _dec_pending(struct iostash_bio *io);
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+#include <linux/blkdev.h>
+static blk_qc_t _io_worker_run(struct work_struct *work);
+#endif
 static void _io_worker(struct work_struct *work);
 static void _io_queue(struct iostash_bio *io);
 
+#if KERNEL_VERSION(4,2,0) <= LINUX_VERSION_CODE
+static void _endio4read(struct bio *clone)
+#else
 static void _endio4read(struct bio *clone, int error)
+#endif
 {
 	struct iostash_bio *io = clone->bi_private;
 	struct hdd_info *hdd = io->hdd;
@@ -46,12 +51,16 @@ static void _endio4read(struct bio *clone, int error)
 		BIO_SECTOR(io->base_bio), bio_sectors(io->base_bio));
 
 	do {
-		if (unlikely(!bio_flagged(clone, BIO_UPTODATE) && !error)) {
+#if KERNEL_VERSION(4,2,0) <= LINUX_VERSION_CODE
+		const int error = clone->bi_error;
+#else
+		if (unlikely(!bio_flagged(clone, BIO_UPTODATE) && !error))
+		{
 			ERR("cloned bio not UPTODATE.");
 			error = -EIO;
 			ssd_online_to_be = 1;	/* because this error does not mean SSD failure */
 		}
-
+#endif
 		io->error = error;
 
 		/* if this bio is for SSD: common case */
@@ -60,7 +69,6 @@ static void _endio4read(struct bio *clone, int error)
 			if (unlikely(error)) {	/* Error handling */
 				ERR("iostash: SSD read error: error = %d, sctr = %ld :::\n",
 				     error, io->psn);
-				/* XXX: do not understand this one */
 				io->ssd->online = ssd_online_to_be;
 
 				_inc_pending(io);	/* to prevent io from releasing */
@@ -82,14 +90,19 @@ static void _endio4read(struct bio *clone, int error)
 	_dec_pending(io);
 }
 
+#if KERNEL_VERSION(4,2,0) <= LINUX_VERSION_CODE
+static void _endio4write(struct bio *clone)
+#else
 static void _endio4write(struct bio *clone, int error)
+#endif
 {
 	struct iostash_bio *io = clone->bi_private;
-
-	if (unlikely(!bio_flagged(clone, BIO_UPTODATE) && !error)) {
+#if KERNEL_VERSION(4,2,0) <= LINUX_VERSION_CODE
+	const int error = clone->bi_error;
+#else
+	if (unlikely(!bio_flagged(clone, BIO_UPTODATE) && !error))
 		error = -EIO;
-	}
-
+#endif
 	if (unlikely(error)) {
 		if (clone->bi_bdev != io->base_bio->bi_bdev) {
 			ERR("iostash: SSD write error: error = %d, sctr = %ld :::\n",
@@ -183,15 +196,28 @@ static void _dec_pending(struct iostash_bio *io)
 		}
 #endif
 		mempool_free(io, hdd->io_pool);
+#if KERNEL_VERSION(4,2,0) <= LINUX_VERSION_CODE
+		(void) error;
+		bio_endio(base_bio);
+#else
 		bio_endio(base_bio, error);
-
+#endif
 		atomic_dec(&hdd->io_pending);
 		BUG_ON(NULL == ssd);
 		atomic_dec(&ssd->nr_ref);
 	}
 }
 
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
 static void _io_worker(struct work_struct *work)
+{
+	_io_worker_run(work);
+}
+
+static blk_qc_t _io_worker_run(struct work_struct *work)
+#else
+static void _io_worker(struct work_struct *work)
+#endif
 {
 	struct iostash_bio *io = container_of(work, struct iostash_bio, work);
 	struct hdd_info *hdd = io->hdd;
@@ -199,7 +225,9 @@ static void _io_worker(struct work_struct *work)
 	struct bio *clone4ssd;
 	struct bio *clone4hdd;
 	void *hddendfunc;
-
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+	blk_qc_t ret = BLK_QC_T_NONE;
+#endif
 	_inc_pending(io);
 	do {
 		if (bio_data_dir(base_bio) == READ) {	/* Read handling */
@@ -215,7 +243,11 @@ static void _io_worker(struct work_struct *work)
 				/* _clone_init() may fail when SSD became offline */
 				if (_clone_init(io, clone4ssd, 1, _endio4read) == 0) {
 					_inc_pending(io);
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+					ret = generic_make_request(clone4ssd);
+#else
 					generic_make_request(clone4ssd);
+#endif
 					break;
 				}
 
@@ -234,7 +266,11 @@ static void _io_worker(struct work_struct *work)
 				if (_clone_init(io, clone4ssd, 1, _endio4write)
 				    == 0) {
 					_inc_pending(io);
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+					ret = generic_make_request(clone4ssd);
+#else
 					generic_make_request(clone4ssd);
+#endif
 				}
 			}
 		}
@@ -243,7 +279,7 @@ static void _io_worker(struct work_struct *work)
 		clone4hdd = BIO_CLONEBS(base_bio, hdd->bs);
 		if (!clone4hdd) {
 			io->error = -ENOMEM;
-			return;
+			break;
 		}
 
 		/* clone_init() will never fail for HDD */
@@ -251,10 +287,17 @@ static void _io_worker(struct work_struct *work)
 
 		/* Call HDD */
 		_inc_pending(io);
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+		ret = (*hdd->org_mapreq) (hdd->request_q, clone4hdd);
+#else
 		(*hdd->org_mapreq) (hdd->request_q, clone4hdd);
+#endif
 	} while (0);
 
 	_dec_pending(io);
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+	return ret;
+#endif
 }
 
 static void _io_queue(struct iostash_bio *io)
@@ -266,7 +309,9 @@ static void _io_queue(struct iostash_bio *io)
 }
 
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+blk_qc_t iostash_mkrequest(struct request_queue *q, struct bio *bio)
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 int iostash_mkrequest(struct request_queue *q, struct bio *bio)
 #else
 void iostash_mkrequest(struct request_queue *q, struct bio *bio)
@@ -278,7 +323,10 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
         sce_fmap_t fmap;
 	uint32_t nr_sctr;
 	sector_t psn;
-	make_request_fn *org_mapreq;
+	make_request_fn *org_mapreq = NULL;
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+	blk_qc_t ret = BLK_QC_T_NONE;
+#endif
 
 	DBG("Got bio=%p bio->bi_rw(%lu) request at s=%lu l=%u.\n",
 		bio, bio->bi_rw, BIO_SECTOR(bio), bio_sectors(bio));
@@ -294,9 +342,12 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 	if (unlikely(NULL == hdd)) {
 		/* have to requeue the request, somebody was holding a
 		 * dangling reference */
-		ERR("Request holding a dangling make_Request_fn pointer\n.");
+		ERR("Request holding a dangling make_request_fn pointer\n.");
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+		bio->bi_error = -EAGAIN;
+		return ret;
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 		rmb();		/* read the change in make_request_fn */
 		return -EAGAIN; /* retry */
 #else
@@ -353,10 +404,16 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 						atomic_dec(&ssd->nr_ref);
 						break;
 					}
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+					ret = _io_worker_run(&io->work);
+#else
 					_io_queue(io);
+#endif
 					/* lose the reference to hdd, not needed anymore */
 					atomic_dec(&hdd->nr_ref);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+					return ret;
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 					return 0;
 #else
 					return;
@@ -403,16 +460,21 @@ void iostash_mkrequest(struct request_queue *q, struct bio *bio)
 				break;
 			}
 
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+			ret = _io_worker_run(&io->work);
+#else
 			_io_queue(io);
-
+#endif
 			/* lose the reference to hdd , not needed anymore */
 			atomic_dec(&hdd->nr_ref);
 		}
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
-			return 0;
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+		return ret;
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+		return 0;
 #else
-			return;
+		return;
 #endif
 	} while (0);
 

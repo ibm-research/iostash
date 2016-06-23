@@ -204,7 +204,9 @@ void hdd_unregister_all(void);
 struct hdd_info *hdd_search(struct bio *bio);
 
 /* Request hooking */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
+#if KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE
+blk_qc_t iostash_mkrequest(struct request_queue *q, struct bio *bio);
+#elif LINUX_VERSION_CODE <= KERNEL_VERSION(3,1,0)
 int iostash_mkrequest(struct request_queue *q, struct bio *bio);
 #else
 void iostash_mkrequest(struct request_queue *q, struct bio *bio);
