@@ -32,6 +32,11 @@
 #endif
 
 #include <linux/version.h>
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,32)
+#include <linux/utsrelease.h>
+#else
+#include <generated/utsrelease.h>
+#endif
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/blkdev.h>

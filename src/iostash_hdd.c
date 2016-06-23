@@ -66,7 +66,11 @@ static void _insert_hdd(struct hdd_info *const hdd)
 static struct hdd_info *_alloc_hdd(char *path)
 {
 	struct hdd_info *hdd;
+#if (KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE) && (defined UTS_UBUNTU_RELEASE_ABI)
+	struct block_device *const bdev = lookup_bdev(path, 0);
+#else
 	struct block_device *const bdev = lookup_bdev(path);
+#endif
 	dev_t dev_t = 0;
 	if (IS_ERR(bdev))
 		return NULL;
@@ -428,7 +432,11 @@ void hdd_unregister_by_hdd(struct hdd_info *hdd)
 
 void hdd_unregister(char *path)
 {
+#if (KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE) && (defined UTS_UBUNTU_RELEASE_ABI)
+	struct block_device *const bdev = lookup_bdev(path, 0);
+#else
 	struct block_device *const bdev = lookup_bdev(path);
+#endif
 	dev_t dev_t = 0;
 	DBG("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))

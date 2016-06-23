@@ -66,7 +66,11 @@ static void _insert_ssd(struct ssd_info *const ssd)
 static struct ssd_info *_alloc_ssd(char *path)
 {
 	struct ssd_info *ssd;
+#if (KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE) && (defined UTS_UBUNTU_RELEASE_ABI)
+	struct block_device *const bdev = lookup_bdev(path, 0);
+#else
 	struct block_device *const bdev = lookup_bdev(path);
+#endif
 	dev_t dev_t = 0;
 	if (IS_ERR(bdev))
 		return NULL;
@@ -308,7 +312,11 @@ void _ssd_remove(struct ssd_info *ssd)
 
 void ssd_unregister(char *path)
 {
+#if (KERNEL_VERSION(4,4,0) <= LINUX_VERSION_CODE) && (defined UTS_UBUNTU_RELEASE_ABI)
+	struct block_device *const bdev = lookup_bdev(path, 0);
+#else
 	struct block_device *const bdev = lookup_bdev(path);
+#endif
 	dev_t dev_t = 0;
 	DBG("bdev %p found for path %s.\n", bdev, path);
 	if (IS_ERR(bdev))
